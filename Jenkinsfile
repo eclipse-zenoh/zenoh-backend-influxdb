@@ -88,7 +88,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-x86_64-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh-backend-influxdb \
+            cargo deb -p zenoh_backend_influxdb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-gnu.tgz --strip-components 3 target/x86_64-unknown-linux-gnu/release/*.so
         '''
@@ -102,7 +102,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-i686-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh-backend-influxdb \
+            cargo deb -p zenoh_backend_influxdb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-i686-unknown-linux-gnu.tgz --strip-components 3 target/i686-unknown-linux-gnu/release/*.so
         '''
@@ -116,7 +116,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2014-aarch64-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh-backend-influxdb \
+            cargo deb -p zenoh_backend_influxdb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-aarch64-unknown-linux-gnu.tgz --strip-components 3 target/aarch64-unknown-linux-gnu/release/*.so
         '''
