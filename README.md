@@ -87,7 +87,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 -------------------------------
 ## **Behaviour of the backend**
 
-## Mapping to InfluxDB concepts
+### Mapping to InfluxDB concepts
 Each **storage** will map to an InfluxDB **database**.  
 Each **path** to store will map to a an InfluxDB
 [**measurement**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#measurement)
