@@ -88,7 +88,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-x86_64-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh_backend_influxdb \
+            cargo deb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-gnu.tgz --strip-components 3 target/x86_64-unknown-linux-gnu/release/*.so
         '''
@@ -102,7 +102,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-i686-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh_backend_influxdb \
+            cargo deb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-i686-unknown-linux-gnu.tgz --strip-components 3 target/i686-unknown-linux-gnu/release/*.so
         '''
@@ -116,7 +116,7 @@ pipeline {
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2014-aarch64-gnu \
             /bin/bash -c "\
             cargo build --release && \
-            cargo deb -p zenoh_backend_influxdb \
+            cargo deb \
             "
         tar -czvf zenoh-backend-influxdb-${LABEL}-aarch64-unknown-linux-gnu.tgz --strip-components 3 target/aarch64-unknown-linux-gnu/release/*.so
         '''
@@ -161,7 +161,7 @@ pipeline {
         sshagent ( ['projects-storage.eclipse.org-bot-ssh']) {
           sh '''
             ssh genie.zenoh@projects-storage.eclipse.org mkdir -p /home/data/httpd/download.eclipse.org/zenoh/zenoh-backend-influxdb/${LABEL}
-            scp zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-musl.tgz target/x86_64-unknown-linux-musl/debian/*.deb genie.zenoh@projects-storage.eclipse.org:/home/data/httpd/download.eclipse.org/zenoh/zenoh-backend-influxdb/${LABEL}/
+            scp zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-musl.tgz genie.zenoh@projects-storage.eclipse.org:/home/data/httpd/download.eclipse.org/zenoh/zenoh-backend-influxdb/${LABEL}/
           '''
         }
       }
