@@ -14,17 +14,42 @@ See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more de
 This backend relies on an InfluxDB server to implement the storages.
 Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
 
+:point_right: **Download:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
+
 -------------------------------
 ## **Examples of usage**
 
+Prerequisites:
+ - You have a zenoh router running, and the `zbackend_influxdb` library file is available in `~/.zenoh/lib`.
+ - You have an InfluxDB service running and listening on `http://localhost:8086`
+
 Using `curl` on the zenoh router to add backend and storages:
 ```bash
-# Add a backend connected to InflusDB service on http://localhost:8086
+# Add a backend connected to InfluxDB service on http://localhost:8086
 curl -X PUT -H 'content-type:application/properties' -d "url=http://localhost:8086" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb
 
 # Add a storage on /demo/example/** using the database named "zenoh-example"
 curl -X PUT -H 'content-type:application/properties' -d "path_expr=/demo/example/**;db=zenoh-example" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
+
+# Put some values at different time intervals
+curl -X PUT -d "TEST-1" http://localhost:8000/demo/example/test
+curl -X PUT -d "TEST-2" http://localhost:8000/demo/example/test
+curl -X PUT -d "TEST-3" http://localhost:8000/demo/example/test
+
+# Retrive them as a time serie
+curl http://localhost:8000/demo/example/test?(starttime=0)
 ```
+
+Alternatively, you can test running both the zenoh router and the InfluxDB service in Docker containers:
+ - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/master/docker-compose.yml) file
+ - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzbackend_influxdb.so` library
+   for `x86_64-unknown-linux-musl` target within.
+ - Start the containers running 
+   ```bash
+   docker-compose up -d
+   ```
+ - Run the `curl` commands above, replacing the URL to InfluxDB with `http://influxdb:8086` (instead of localhost)
+
 
 -------------------------------
 ## **Properties for Backend creation**

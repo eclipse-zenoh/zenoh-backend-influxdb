@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  influxdb:
+    image: influxdb
+    restart: unless-stopped
+    ports:
+      - 8086:8086
+    volumes:
+      - influxdb-volume:/var/lib/influxdb
+    networks:
+      - zenoh-nw
+
+  zenoh:
+    image: eclipse/zenoh
+    restart: unless-stopped
+    ports:
+      - 7447:7447
+      - 7447:7447/udp
+      - 8000:8000
+    volumes:
+      - ./zenoh_docker:/root/.zenoh
+    environment:
+      - RUST_LOG=debug
+    networks:
+      - zenoh-nw
+
+volumes:
+  influxdb-volume:
+
+networks:
+  zenoh-nw:
+    driver: bridge
