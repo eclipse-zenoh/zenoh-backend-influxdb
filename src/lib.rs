@@ -49,14 +49,21 @@ pub const PROP_STORAGE_PASSWORD: &str = PROP_BACKEND_PASSWORD;
 // delay after deletion to drop a measurement
 const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 
+const GIT_VERSION: &str = git_version::git_version!(prefix = "v", cargo_prefix = "v");
+lazy_static::lazy_static!(
+    static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
+);
+
 #[no_mangle]
 pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
+    debug!("InfluxDB backend {}", LONG_VERSION.as_str());
 
     // work on a copy of properties to update them before re-use as admin_status.
     let mut props = properties.clone();
+    props.insert("version".into(), LONG_VERSION.clone());
 
     let url = match props.get(PROP_BACKEND_URL) {
         Some(url) => url.clone(),

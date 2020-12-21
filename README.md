@@ -11,7 +11,8 @@ In zenoh a backend is a storage technology (such as DBMS, time-series database, 
 keys/values publications made via zenoh and return them on queries.
 See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more details.
 
-This backend relies on an InfluxDB server to implement the storages.
+This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxdb/) server
+to implement the storages.
 Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
 
 :point_right: **Download:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
@@ -73,7 +74,9 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 
 - **`"db"`** (optional) : the InfluxDB database name the storage will map into. If not specified, a random name will be generated, and the corresponding database will be created (even if `"create_db"` is not set).
 
-- **`"create_db"`** (optional) : create the InfluxDB database if not already existing. *(the value doesn't matter, only the property existence is checked)*
+- **`"create_db"`** (optional) : create the InfluxDB database if not already existing.
+  By default the database is not created, unless `"db"` property is not specified.
+  *(the value doesn't matter, only the property existence is checked)*
 
 - **`"on_closure"`** (optional) : the strategy to use when the Storage is removed. There are 3 options:
   - *unset*: the database remains untouched (this is the default behaviour)
