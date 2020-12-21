@@ -6,6 +6,9 @@ pipeline {
                  type: 'PT_BRANCH_TAG',
                  description: 'The Git tag to checkout. If not specified "master" will be checkout.',
                  defaultValue: 'master')
+    string(name: 'RUST_TOOLCHAIN',
+           description: 'The version of rust toolchain to use (e.g. nightly-2020-12-20)',
+           defaultValue: 'nightly')
     booleanParam(name: 'BUILD_MACOSX',
                  description: 'Build macosx target.',
                  defaultValue: true)
@@ -55,8 +58,7 @@ pipeline {
       steps {
         sh '''
         env
-        echo "Building zenoh-backend-influxdb-${LABEL}"
-        rustup update
+        rustup default ${RUST_TOOLCHAIN}
         '''
       }
     }
@@ -65,6 +67,7 @@ pipeline {
       when { expression { return params.BUILD_MACOSX }}
       steps {
         sh '''
+        echo "Building zenoh-backend-influxdb-${LABEL}"
         cargo build --release
         cargo test --release
         tar -czvf zenoh-backend-influxdb-${LABEL}-macosx${MACOSX_DEPLOYMENT_TARGET}-x86-64.tgz --strip-components 2 target/release/*.dylib
@@ -76,7 +79,11 @@ pipeline {
       when { expression { return params.BUILD_DOCKER }}
       steps {
         sh '''
-        docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-x86_64-unknown-linux-musl cargo build --release
+        docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-x86_64-unknown-linux-musl \
+          /bin/ash -c "\
+            rustup default ${RUST_TOOLCHAIN} && \
+            cargo build --release \
+          "
         tar -czvf zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-musl.tgz --strip-components 3 target/x86_64-unknown-linux-musl/release/*.so
         '''
       }
@@ -87,11 +94,13 @@ pipeline {
       steps {
         sh '''
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-x86_64-gnu \
-            cargo build --release
-        if [[ ${GIT_TAG} != origin/* ]]; then
-          docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-x86_64-gnu \
-            cargo deb
-        fi
+          /bin/bash -c "\
+            rustup default ${RUST_TOOLCHAIN} && \
+            cargo build --release && \
+            if [[ ${GIT_TAG} != origin/* ]]; then \
+                cargo deb \
+            ;fi \
+          "
         tar -czvf zenoh-backend-influxdb-${LABEL}-x86_64-unknown-linux-gnu.tgz --strip-components 3 target/x86_64-unknown-linux-gnu/release/*.so
         '''
       }
@@ -102,11 +111,13 @@ pipeline {
       steps {
         sh '''
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-i686-gnu \
-            cargo build --release
-        if [[ ${GIT_TAG} != origin/* ]]; then
-          docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2010-i686-gnu \
-            cargo deb
-        fi
+          /bin/bash -c "\
+            rustup default ${RUST_TOOLCHAIN} && \
+            cargo build --release && \
+            if [[ ${GIT_TAG} != origin/* ]]; then \
+                cargo deb \
+            ;fi \
+          "
         tar -czvf zenoh-backend-influxdb-${LABEL}-i686-unknown-linux-gnu.tgz --strip-components 3 target/i686-unknown-linux-gnu/release/*.so
         '''
       }
@@ -117,11 +128,13 @@ pipeline {
       steps {
         sh '''
         docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2014-aarch64-gnu \
-            cargo build --release
-        if [[ ${GIT_TAG} != origin/* ]]; then
-          docker run --init --rm -v $(pwd):/workdir -w /workdir adlinktech/zenoh-dev-manylinux2014-aarch64-gnu \
-            cargo deb
-        fi
+          /bin/bash -c "\
+            rustup default ${RUST_TOOLCHAIN} && \
+            cargo build --release && \
+            if [[ ${GIT_TAG} != origin/* ]]; then \
+                cargo deb \
+            ;fi \
+          "
         tar -czvf zenoh-backend-influxdb-${LABEL}-aarch64-unknown-linux-gnu.tgz --strip-components 3 target/aarch64-unknown-linux-gnu/release/*.so
         '''
       }
@@ -156,13 +169,12 @@ pipeline {
           sh '''
             if [[ ${GIT_TAG} == origin/* ]]; then
               ssh genie.zenoh@projects-storage.eclipse.org rm -fr ${DOWNLOAD_DIR}
-              ssh genie.zenoh@projects-storage.eclipse.org mkdir -p ${DOWNLOAD_DIR}
-              COMMIT_ID=`git log -n1 --format="%h"`
-              echo "https://github.com/eclipse-zenoh/zenoh-backend-influxdb/tree/${COMMIT_ID}" > _git_commit_${COMMIT_ID}.txt
-              scp _git_commit_${COMMIT_ID}.txt genie.zenoh@projects-storage.eclipse.org:${DOWNLOAD_DIR}
-            else
-              ssh genie.zenoh@projects-storage.eclipse.org mkdir -p ${DOWNLOAD_DIR}
             fi
+            ssh genie.zenoh@projects-storage.eclipse.org mkdir -p ${DOWNLOAD_DIR}
+            COMMIT_ID=`git log -n1 --format="%h"`
+            echo "https://github.com/eclipse-zenoh/zenoh-backend-influxdb/tree/${COMMIT_ID}" > _git_commit_${COMMIT_ID}.txt
+            rustc --version > _rust_toolchain_${RUST_TOOLCHAIN}.txt
+            scp _*.txt genie.zenoh@projects-storage.eclipse.org:${DOWNLOAD_DIR}/
           '''
         }
       }
