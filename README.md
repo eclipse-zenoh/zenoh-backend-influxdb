@@ -133,10 +133,23 @@ The `"starttime"` and `"stoptime"` properties support the InfluxDB **[time synta
 -------------------------------
 ## How to build it
 
-Install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). Currently, zenoh requires a nightly version of Rust, type the following to install it after you have followed the previous instructions:
+At first, install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). 
+
+:warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
+built with the exact same Rust version than `zenohd`. Otherwise, incompatibilities in memory mapping
+of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
+
+To know the Rust version you're `zenohd` has been built with, use the `--version` option.  
+Example:
+```bash
+$ zenohd --version
+The zenoh router v0.5.0-beta.5-134-g81e85d7 built with rustc 1.51.0-nightly (2987785df 2020-12-28)
+```
+Here, `zenohd` has been built with the Rust toolchain version **nightly-2020-12-28**.  
+Install and use this toolchain with the following command:
 
 ```bash
-$ rustup default nightly
+$ rustup default nightly-2020-12-28
 ```
 
 And then build the backend with:
