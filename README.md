@@ -145,11 +145,13 @@ Example:
 $ zenohd --version
 The zenoh router v0.5.0-beta.5-134-g81e85d7 built with rustc 1.51.0-nightly (2987785df 2020-12-28)
 ```
-Here, `zenohd` has been built with the Rust toolchain version **nightly-2020-12-28**.  
+Here, `zenohd` has been built with the rustc version `1.51.0-nightly` built on 2020-12-28.  
+A nightly build of rustc is included in the **Rustup** nightly toolchain the day after.
+Thus you'll need to install to toolchain **`nightly-2020-12-29`**
 Install and use this toolchain with the following command:
 
 ```bash
-$ rustup default nightly-2020-12-28
+$ rustup default nightly-2020-12-29
 ```
 
 And then build the backend with:
