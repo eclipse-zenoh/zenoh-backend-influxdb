@@ -11,7 +11,6 @@
 // Contributors:
 //   ADLINK zenoh team, <zenoh@adlink-labs.tech>
 //
-#![feature(async_closure)]
 
 use async_std::task;
 use async_trait::async_trait;
