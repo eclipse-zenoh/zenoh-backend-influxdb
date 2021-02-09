@@ -13,7 +13,7 @@
 #
 [package]
 name = "zenoh_backend_influxdb"
-version = "0.5.0-beta.7"
+version = "0.5.0-beta.8"
 authors = ["kydos <angelo@icorsaro.net>",
            "Julien Enoch <julien@enoch.fr>",
            "Olivier Hécart <olivier.hecart@adlinktech.com>",
@@ -25,9 +25,9 @@ name = "zbackend_influxdb"
 crate-type = ["cdylib"]
 
 [dependencies]
-zenoh_backend_traits = "0.5.0-beta.7"
-zenoh = "0.5.0-beta.7"
-zenoh-util = "0.5.0-beta.7"
+zenoh_backend_traits = { git =  "https://github.com/eclipse-zenoh/zenoh" }
+zenoh = { git =  "https://github.com/eclipse-zenoh/zenoh" }
+zenoh-util = { git =  "https://github.com/eclipse-zenoh/zenoh" }
 async-std = "=1.9.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
@@ -50,4 +50,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2017, 2020 ADLINK Technology Inc."
 section = "net"
 license-file = ["LICENSE", "0"]
-depends = "zenoh-storages (==0.5.0~beta.7)"
+depends = "zenoh-storages (==0.5.0~beta.8)"
