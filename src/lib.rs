@@ -366,7 +366,7 @@ impl Storage for InfluxDbStorage {
 
         // Store or delete the sample depending the ChangeKind
         match change.kind {
-            ChangeKind::PUT => {
+            ChangeKind::Put => {
                 // get timestamp of deletion of this measurement, if any
                 if let Some(del_time) = self.get_deletion_timestamp(measurement).await? {
                     // ignore sample if oldest than the deletion
@@ -405,7 +405,7 @@ impl Storage for InfluxDbStorage {
                     });
                 }
             }
-            ChangeKind::DELETE => {
+            ChangeKind::Delete => {
                 // delete all points from the measurement that are older than this DELETE message
                 // (in case more recent PUT have been recevived un-ordered)
                 let query = InfluxQuery::raw_read_query(format!(
@@ -441,7 +441,7 @@ impl Storage for InfluxDbStorage {
                 // schedule the drop of measurement later in the future, if it's empty
                 let _ = self.schedule_measurement_drop(measurement).await;
             }
-            ChangeKind::PATCH => {
+            ChangeKind::Patch => {
                 println!("Received PATCH for {}: not yet supported", change.path);
             }
         }
