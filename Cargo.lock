@@ -1135,9 +1135,9 @@ checksum = "ba4aede83fc3617411dc6993bc8c70919750c1c257c6ca6a502aed6e0e2394ae"
 
 [[package]]
 name = "libloading"
-version = "0.6.7"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "351a32417a12d5f7e82c368a66781e307834dae04c6ce0cd4456d52989229883"
+checksum = "6f84d96438c15fcd6c3f244c8fce01d1e2b9c6b5623e9c711dc9286d8fc92d6a"
 dependencies = [
  "cfg-if 1.0.0",
  "winapi 0.3.9",
@@ -1203,19 +1203,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a19900e7eee95eb2b3c2e26d12a874cc80aaf750e31be6fcbe743ead369fa45d"
 dependencies = [
  "libc",
- "socket2 0.4.0",
-]
-
-[[package]]
-name = "nix"
-version = "0.19.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ccba0cfe4fdf15982d1674c69b1fd80bad427d293849982668dfe454bd61f2"
-dependencies = [
- "bitflags 1.2.1",
- "cc",
- "cfg-if 1.0.0",
- "libc",
+ "socket2",
 ]
 
 [[package]]
@@ -1824,7 +1812,7 @@ checksum = "b854a362375dfe8ab12ea8a98228040d37293c988f85fbac9fa0f83336387966"
 dependencies = [
  "cfg-if 0.1.10",
  "libc",
- "nix 0.20.0",
+ "nix",
  "quick-error",
  "rand 0.8.3",
  "winapi 0.3.9",
@@ -1872,17 +1860,6 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
-
-[[package]]
-name = "socket2"
-version = "0.3.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122e570113d28d773067fab24266b66753f6ea915758651696b6e35e49f88d6e"
-dependencies = [
- "cfg-if 1.0.0",
- "libc",
- "winapi 0.3.9",
-]
 
 [[package]]
 name = "socket2"
@@ -2485,7 +2462,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "zenoh"
 version = "0.5.0-beta.8"
-source = "git+https://github.com/eclipse-zenoh/zenoh#0faca9afe947452c17dbcba8c9d775abf93a5ff7"
+source = "git+https://github.com/eclipse-zenoh/zenoh#9a4f886f8f073d3e92f93072c44d18fd1c9f151b"
 dependencies = [
  "async-rustls",
  "async-std",
@@ -2501,7 +2478,7 @@ dependencies = [
  "lazy_static",
  "libloading",
  "log 0.4.14",
- "nix 0.19.1",
+ "nix",
  "petgraph",
  "pin-project-lite",
  "rand 0.8.3",
@@ -2510,7 +2487,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shared_memory",
- "socket2 0.3.19",
+ "socket2",
  "uhlc",
  "uuid",
  "vec_map",
@@ -2520,7 +2497,7 @@ dependencies = [
 [[package]]
 name = "zenoh-util"
 version = "0.5.0-beta.8"
-source = "git+https://github.com/eclipse-zenoh/zenoh#0faca9afe947452c17dbcba8c9d775abf93a5ff7"
+source = "git+https://github.com/eclipse-zenoh/zenoh#9a4f886f8f073d3e92f93072c44d18fd1c9f151b"
 dependencies = [
  "aes-soft",
  "async-std",
@@ -2568,7 +2545,7 @@ dependencies = [
 [[package]]
 name = "zenoh_backend_traits"
 version = "0.5.0-beta.8"
-source = "git+https://github.com/eclipse-zenoh/zenoh#0faca9afe947452c17dbcba8c9d775abf93a5ff7"
+source = "git+https://github.com/eclipse-zenoh/zenoh#9a4f886f8f073d3e92f93072c44d18fd1c9f151b"
 dependencies = [
  "async-std",
  "async-trait",
