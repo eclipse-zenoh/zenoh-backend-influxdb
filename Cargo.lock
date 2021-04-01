@@ -2461,9 +2461,8 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "zenoh"
-version = "0.5.0-beta.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11919a95163e94564d91794af769a324a16f9404aa775d1731fced6ad3cf12d2"
+version = "0.5.0-dev"
+source = "git+https://github.com/eclipse-zenoh/zenoh#3487f6a79280242ac8fb180a826dc9b85bec6124"
 dependencies = [
  "async-rustls",
  "async-std",
@@ -2497,9 +2496,8 @@ dependencies = [
 
 [[package]]
 name = "zenoh-util"
-version = "0.5.0-beta.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536af37fc591c7d3786338e71f87e3d2bd97985b3fbdb7952aa2f219c635a331"
+version = "0.5.0-dev"
+source = "git+https://github.com/eclipse-zenoh/zenoh#3487f6a79280242ac8fb180a826dc9b85bec6124"
 dependencies = [
  "aes-soft",
  "async-std",
@@ -2525,7 +2523,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh_backend_influxdb"
-version = "0.5.0-beta.8"
+version = "0.5.0-dev"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2546,9 +2544,8 @@ dependencies = [
 
 [[package]]
 name = "zenoh_backend_traits"
-version = "0.5.0-beta.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "171d1f4ea6bb71ab061892797cae1b0aba751d879dbecbd8564c814bac447523"
+version = "0.5.0-dev"
+source = "git+https://github.com/eclipse-zenoh/zenoh#3487f6a79280242ac8fb180a826dc9b85bec6124"
 dependencies = [
  "async-std",
  "async-trait",
