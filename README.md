@@ -29,8 +29,8 @@ Using `curl` on the zenoh router to add backend and storages:
 # Add a backend connected to InfluxDB service on http://localhost:8086
 curl -X PUT -H 'content-type:application/properties' -d "url=http://localhost:8086" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb
 
-# Add a storage on /demo/example/** using the database named "zenoh-example", creating it if not already existing
-curl -X PUT -H 'content-type:application/properties' -d "path_expr=/demo/example/**;db=zenoh-example;create_db" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
+# Add a storage on /demo/example/** using the database named "zenoh_example", creating it if not already existing
+curl -X PUT -H 'content-type:application/properties' -d "path_expr=/demo/example/**;db=zenoh_example;create_db" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
 
 # Put some values at different time intervals
 curl -X PUT -d "TEST-1" http://localhost:8000/demo/example/test
