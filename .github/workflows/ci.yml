@@ -36,10 +36,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Install latest nightly
+    - name: Install Rust toolchain
       uses: actions-rs/toolchain@v1
       with:
-          toolchain: nightly
           components: rustfmt, clippy
 
     - name: Code format check
