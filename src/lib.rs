@@ -244,7 +244,7 @@ impl Backend for InfluxDbBackend {
 }
 
 enum OnClosure {
-    DropDB,
+    DropDb,
     DropSeries,
     DoNothing,
 }
@@ -255,7 +255,7 @@ impl TryFrom<&Properties> for OnClosure {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
                 if s == "drop_db" {
-                    Ok(OnClosure::DropDB)
+                    Ok(OnClosure::DropDb)
                 } else if s == "drop_series" {
                     Ok(OnClosure::DropSeries)
                 } else {
@@ -519,6 +519,7 @@ impl Storage for InfluxDbStorage {
                                                 timestamp: Some(timestamp),
                                                 kind: None,
                                                 encoding: Some(encoding),
+                                                is_shm: false,
                                             });
                                             query
                                                 .reply(Sample {
@@ -566,7 +567,7 @@ impl Drop for InfluxDbStorage {
     fn drop(&mut self) {
         debug!("Closing InfluxDB storage");
         match self.on_closure {
-            OnClosure::DropDB => {
+            OnClosure::DropDb => {
                 let _ = task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
