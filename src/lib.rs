@@ -511,16 +511,10 @@ impl Storage for InfluxDbStorage {
                                     ) {
                                         (Ok(value), Ok(timestamp)) => {
                                             let (encoding, payload) = value.encode();
-                                            let data_info = Some(DataInfo {
-                                                source_id: None,
-                                                source_sn: None,
-                                                first_router_id: None,
-                                                first_router_sn: None,
-                                                timestamp: Some(timestamp),
-                                                kind: None,
-                                                encoding: Some(encoding),
-                                                is_shm: false,
-                                            });
+                                            let mut info = DataInfo::new();
+                                            info.encoding = Some(encoding);
+                                            info.timestamp = Some(timestamp);
+                                            let data_info = Some(info);
                                             query
                                                 .reply(Sample {
                                                     res_name: res_name.clone(),

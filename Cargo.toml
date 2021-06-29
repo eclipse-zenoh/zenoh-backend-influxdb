@@ -25,9 +25,9 @@ name = "zbackend_influxdb"
 crate-type = ["cdylib"]
 
 [dependencies]
-zenoh_backend_traits = { git =  "https://github.com/eclipse-zenoh/zenoh" }
-zenoh = { git =  "https://github.com/eclipse-zenoh/zenoh" }
-zenoh-util = { git =  "https://github.com/eclipse-zenoh/zenoh" }
+zenoh_backend_traits = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "master" }
+zenoh = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "master" }
+zenoh-util = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "master" }
 async-std = "=1.9.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
@@ -41,7 +41,7 @@ serde_json = "1.0"
 influxdb = { version = "0.4", default-features = false, features = ["derive", "use-serde", "h1-client-rustls"] }
 
 [build-dependencies]
-rustc_version = "0.3"
+rustc_version = "0.4.0"
 
 [package.metadata.deb]
 name = "zenoh-backend-influxdb"
