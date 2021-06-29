@@ -285,7 +285,7 @@ impl InfluxDbStorage {
             timestamp: String,
         }
 
-        let query = InfluxQuery::raw_read_query(format!(
+        let query = <dyn InfluxQuery>::raw_read_query(format!(
             r#"SELECT "timestamp" FROM "{}" WHERE kind='DEL' ORDER BY time DESC LIMIT 1"#,
             measurement
         ));
@@ -408,7 +408,7 @@ impl Storage for InfluxDbStorage {
             ChangeKind::Delete => {
                 // delete all points from the measurement that are older than this DELETE message
                 // (in case more recent PUT have been recevived un-ordered)
-                let query = InfluxQuery::raw_read_query(format!(
+                let query = <dyn InfluxQuery>::raw_read_query(format!(
                     r#"DELETE FROM "{}" WHERE time < {}"#,
                     measurement, influx_time
                 ));
@@ -474,7 +474,7 @@ impl Storage for InfluxDbStorage {
 
         // the Influx query
         let influx_query_str = format!("SELECT * FROM {} {}", regex, clauses);
-        let influx_query = InfluxQuery::raw_read_query(&influx_query_str);
+        let influx_query = <dyn InfluxQuery>::raw_read_query(&influx_query_str);
 
         // the expected JSon type resulting from the query
         #[derive(Deserialize, Debug)]
@@ -565,7 +565,7 @@ impl Drop for InfluxDbStorage {
                 let _ = task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
-                    let query = InfluxQuery::raw_read_query(format!("DROP DATABASE {}", db));
+                    let query = <dyn InfluxQuery>::raw_read_query(format!("DROP DATABASE {}", db));
                     if let Err(e) = self.admin_client.query(&query).await {
                         error!("Failed to drop InfluxDb database '{}' : {}", db, e)
                     }
@@ -578,7 +578,7 @@ impl Drop for InfluxDbStorage {
                         "Close InfluxDB storage, dropping all series from database {}",
                         db
                     );
-                    let query = InfluxQuery::raw_read_query("DROP SERIES FROM /.*/");
+                    let query = <dyn InfluxQuery>::raw_read_query("DROP SERIES FROM /.*/");
                     if let Err(e) = self.client.query(&query).await {
                         error!(
                             "Failed to drop all series from InfluxDb database '{}' : {}",
@@ -612,7 +612,7 @@ impl Timed for TimedMeasurementDrop {
         }
 
         // check if there is at least 1 point without "DEL" kind in the measurement
-        let query = InfluxQuery::raw_read_query(format!(
+        let query = <dyn InfluxQuery>::raw_read_query(format!(
             r#"SELECT "kind" FROM "{}" WHERE kind!='DEL' LIMIT 1"#,
             self.measurement
         ));
@@ -641,8 +641,10 @@ impl Timed for TimedMeasurementDrop {
         }
 
         // drop the measurement
-        let query =
-            InfluxQuery::raw_read_query(format!(r#"DROP MEASUREMENT "{}""#, self.measurement));
+        let query = <dyn InfluxQuery>::raw_read_query(format!(
+            r#"DROP MEASUREMENT "{}""#,
+            self.measurement
+        ));
         debug!(
             "Drop measurement {} after timeout with Influx query: {:?}",
             self.measurement, query
@@ -665,7 +667,7 @@ async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
     struct Database {
         name: String,
     }
-    let query = InfluxQuery::raw_read_query("SHOW DATABASES");
+    let query = <dyn InfluxQuery>::raw_read_query("SHOW DATABASES");
     debug!("List databases with Influx query: {:?}", query);
     match client.json_query(query).await {
         Ok(mut result) => match result.deserialize_next::<Database>() {
@@ -698,7 +700,7 @@ async fn create_db(
     db_name: &str,
     storage_username: Option<String>,
 ) -> ZResult<()> {
-    let query = InfluxQuery::raw_read_query(format!("CREATE DATABASE {}", db_name));
+    let query = <dyn InfluxQuery>::raw_read_query(format!("CREATE DATABASE {}", db_name));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
         return zerror!(ZErrorKind::Other {
@@ -712,7 +714,7 @@ async fn create_db(
     // is a username is specified for storage access, grant him access to the database
     if let Some(username) = storage_username {
         let query =
-            InfluxQuery::raw_read_query(format!("GRANT ALL ON {} TO {}", db_name, username));
+            <dyn InfluxQuery>::raw_read_query(format!("GRANT ALL ON {} TO {}", db_name, username));
         debug!(
             "Grant access to {} on Influx database: {}",
             username, db_name
