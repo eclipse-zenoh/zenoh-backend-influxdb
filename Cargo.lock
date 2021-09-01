@@ -2148,19 +2148,22 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "surf"
-version = "2.2.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a154d33ca6b5e1fe6fd1c760e5a5cc1202425f6cca2e13229f16a69009f6328"
+checksum = "73f856d60bdb4679fc9ec516c34093484e963431b5016a8429f85a8e74b5ccaa"
 dependencies = [
  "async-std",
  "async-trait",
  "cfg-if",
  "futures-util",
+ "getrandom 0.2.3",
  "http-client",
  "http-types",
  "log",
  "mime_guess",
+ "once_cell",
  "pin-project-lite",
+ "rustls 0.18.1",
  "serde",
  "serde_json",
 ]
@@ -2612,7 +2615,7 @@ dependencies = [
 [[package]]
 name = "zenoh"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#5fbf504d0f06dd8c12a1e413acd72fd381c9675a"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#000a2ba4681c49fe55fd42bafa5f4b8996c57cd7"
 dependencies = [
  "async-global-executor",
  "async-rustls",
@@ -2654,7 +2657,7 @@ dependencies = [
 [[package]]
 name = "zenoh-plugin-trait"
 version = "0.1.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#5fbf504d0f06dd8c12a1e413acd72fd381c9675a"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#000a2ba4681c49fe55fd42bafa5f4b8996c57cd7"
 dependencies = [
  "clap",
  "libloading",
@@ -2665,7 +2668,7 @@ dependencies = [
 [[package]]
 name = "zenoh-util"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#5fbf504d0f06dd8c12a1e413acd72fd381c9675a"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#000a2ba4681c49fe55fd42bafa5f4b8996c57cd7"
 dependencies = [
  "aes 0.7.4",
  "async-std",
@@ -2715,7 +2718,7 @@ dependencies = [
 [[package]]
 name = "zenoh_backend_traits"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#5fbf504d0f06dd8c12a1e413acd72fd381c9675a"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=master#000a2ba4681c49fe55fd42bafa5f4b8996c57cd7"
 dependencies = [
  "async-std",
  "async-trait",
