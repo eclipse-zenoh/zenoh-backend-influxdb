@@ -767,13 +767,6 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
 
 fn clauses_from_selector(s: &Selector) -> ZResult<String> {
     let value_selector = s.parse_value_selector()?;
-    error!(
-        "****** value_selector={}  starttime={:?}  stoptime={:?}",
-        value_selector,
-        value_selector.properties.get("starttime"),
-        value_selector.properties.get("stoptime")
-    );
-
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
     match (
