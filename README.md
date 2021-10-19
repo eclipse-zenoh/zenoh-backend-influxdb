@@ -30,7 +30,7 @@ Using `curl` on the zenoh router to add backend and storages:
 curl -X PUT -H 'content-type:application/properties' -d "url=http://localhost:8086" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb
 
 # Add a storage on /demo/example/** using the database named "zenoh_example", creating it if not already existing
-curl -X PUT -H 'content-type:application/properties' -d "path_expr=/demo/example/**;db=zenoh_example;create_db" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
+curl -X PUT -H 'content-type:application/properties' -d "key_expr=/demo/example/**;db=zenoh_example;create_db" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
 
 # Put some values at different time intervals
 curl -X PUT -d "TEST-1" http://localhost:8000/demo/example/test
@@ -67,10 +67,10 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 -------------------------------
 ## **Properties for Storage creation**
 
-- **`"path_expr"`** (**required**) : the Storage's [Path Expression](../abstractions#path-expression)
+- **`"key_expr"`** (**required**) : the Storage's [Key Expression](../abstractions#key-expression)
 
-- **`"path_prefix"`** (optional) : a prefix of the `"path_expr"` that will be stripped from each path to store.  
-  _Example: with `"path_expr"="/demo/example/**"` and `"path_prefix"="/demo/example/"` the path `"/demo/example/foo/bar"` will be stored as key: `"foo/bar"`. But replying to a get on `"/demo/**"`, the key `"foo/bar"` will be transformed back to the original path (`"/demo/example/foo/bar"`)._
+- **`"key_prefix"`** (optional) : a prefix of the `"key_expr"` that will be stripped from each key to store.  
+  _Example: with `"key_expr"="/demo/example/**"` and `"key_prefix"="/demo/example/"` the key `"/demo/example/foo/bar"` will be stored as key: `"foo/bar"`. But replying to a get on `"/demo/**"`, the key `"foo/bar"` will be transformed back to the original key (`"/demo/example/foo/bar"`)._
 
 - **`"db"`** (optional) : the InfluxDB database name the storage will map into. If not specified, a random name will be generated, and the corresponding database will be created (even if `"create_db"` is not set).
 
@@ -92,25 +92,25 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 
 ### Mapping to InfluxDB concepts
 Each **storage** will map to an InfluxDB **database**.  
-Each **path** to store will map to a an InfluxDB
+Each **key** to store will map to a an InfluxDB
 [**measurement**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#measurement)
-named with the path stripped from the `"path_prefix"` property (see below).  
+named with the key stripped from the `"key_prefix"` property (see below).  
 Each **key/value** put into the storage will map to an InfluxDB
 [**point**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#point) reusing the timestamp set by zenoh
 (but with a precision of nanoseconds). The fileds and tags of the point is are the following:
- - `"kind"` tag: the zenoh change kind (`"PUT"` for a value that have been put, or `"DEL"` to mark the deletion of the path)
+ - `"kind"` tag: the zenoh change kind (`"PUT"` for a value that have been put, or `"DEL"` to mark the deletion of the key)
  - `"timestamp"` field: the original zenoh timestamp
  - `"encoding"` field: the value's encoding flag
  - `"base64"` field: a boolean indicating if the value is encoded in base64
  - `"value"`field: the value as a string, possibly encoded in base64 for binary values.
 
 ### Behaviour on deletion
-On deletion of a path, all points with a timestamp before the deletion message are deleted.
+On deletion of a key, all points with a timestamp before the deletion message are deleted.
 A point with `"kind"="DEL`" is inserted (to avoid re-insertion of points with an older timestamp in case of un-ordered messages).
-After a delay (5 seconds), the measurement corresponding to the deleted path is dropped if it still contains no points.
+After a delay (5 seconds), the measurement corresponding to the deleted key is dropped if it still contains no points.
 
 ### Behaviour on GET
-On GET operations, by default the storage returns only the latest point for each path/measurement.
+On GET operations, by default the storage returns only the latest point for each key/measurement.
 This is to be coherent with other backends technologies that only store 1 value per-key.  
 If you want to get time-series as a result of a GET operation, you need to specify the `"starttime"` and/or `"stoptime"`
 properties in your [Selector](../abstractions#selector).

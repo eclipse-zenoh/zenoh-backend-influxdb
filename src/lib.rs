@@ -141,14 +141,14 @@ impl Backend for InfluxDbBackend {
         // work on a copy of properties to update them before re-use as admin_status.
         let mut props = properties.clone();
 
-        let path_expr = props.get(PROP_STORAGE_PATH_EXPR).unwrap();
-        let path_prefix = match props.get(PROP_STORAGE_PATH_PREFIX) {
+        let path_expr = props.get(PROP_STORAGE_KEY_EXPR).unwrap();
+        let path_prefix = match props.get(PROP_STORAGE_KEY_PREFIX) {
             Some(p) => {
                 if !path_expr.starts_with(p) {
                     return zerror!(ZErrorKind::Other {
                         descr: format!(
                             "The specified {}={} is not a prefix of {}={}",
-                            PROP_STORAGE_PATH_PREFIX, p, PROP_STORAGE_PATH_EXPR, path_expr
+                            PROP_STORAGE_KEY_PREFIX, p, PROP_STORAGE_KEY_EXPR, path_expr
                         )
                     });
                 }
@@ -514,7 +514,7 @@ impl Storage for InfluxDbStorage {
                                             }
                                         }
                                     } else {
-                                        ZBuf::from(zpoint.value.as_bytes())
+                                        ZBuf::from(zpoint.value.into_bytes())
                                     };
                                     let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
                                         Ok(t) => t,
