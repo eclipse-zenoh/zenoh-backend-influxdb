@@ -23,12 +23,14 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zenoh::buf::ZBuf;
 use zenoh::prelude::*;
 use zenoh::time::new_reception_timestamp;
 use zenoh::time::Timestamp;
+use zenoh_backend_traits::config::{BackendConfig, StorageConfig};
 use zenoh_backend_traits::*;
 use zenoh_util::collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_util::{zerror, zerror2};
@@ -53,23 +55,26 @@ lazy_static::lazy_static!(
     static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
 );
 
+#[allow(dead_code)]
+const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
+
 #[no_mangle]
-pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
+pub extern "C" fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
     debug!("InfluxDB backend {}", LONG_VERSION.as_str());
 
-    // work on a copy of properties to update them before re-use as admin_status.
-    let mut props = properties.clone();
-    props.insert("version".into(), LONG_VERSION.clone());
+    config
+        .rest
+        .insert("version".into(), LONG_VERSION.clone().into());
 
-    let url = match props.get(PROP_BACKEND_URL) {
-        Some(url) => url.clone(),
-        None => {
+    let url = match config.rest.get(PROP_BACKEND_URL) {
+        Some(serde_json::Value::String(url)) => url.clone(),
+        _ => {
             return zerror!(ZErrorKind::Other {
                 descr: format!(
-                    "Properties for InfluxDb Backend miss '{}'",
+                    "Mandatory property `{}` for InfluxDb Backend must be a string",
                     PROP_BACKEND_URL
                 )
             })
@@ -81,27 +86,19 @@ pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
 
     // Note: remove username/password from properties to not re-expose them in admin_status
     let credentials = match (
-        props.remove(PROP_BACKEND_USERNAME),
-        props.remove(PROP_BACKEND_PASSWORD),
+        config.rest.remove(PROP_BACKEND_USERNAME),
+        config.rest.remove(PROP_BACKEND_PASSWORD),
     ) {
-        (Some(username), Some(password)) => {
+        (Some(serde_json::Value::String(username)), Some(serde_json::Value::String(password))) => {
             admin_client = admin_client.with_auth(&username, &password);
             Some((username, password))
         }
         (None, None) => None,
-        (None, _) => {
+        _ => {
             return zerror!(ZErrorKind::Other {
                 descr: format!(
-                    "Properties for InfluxDb Backend includes '{}' but not '{}",
+                    "Optional properties `{}` and `{}` must coexist and be strings",
                     PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                )
-            })
-        }
-        (_, None) => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Properties for InfluxDb Backend includes '{}' but not '{}",
-                    PROP_BACKEND_PASSWORD, PROP_BACKEND_USERNAME
                 )
             })
         }
@@ -111,10 +108,9 @@ pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
     let admin_client_copy = admin_client.clone();
     match async_std::task::block_on(async move { admin_client_copy.ping().await }) {
         Ok(_) => {
-            props.insert(PROP_BACKEND_TYPE.into(), "InfluxDB".into());
-            let admin_status = zenoh::properties::properties_to_json_value(&props);
+            config.rest.insert("type".into(), "InfluxDB".into());
             Ok(Box::new(InfluxDbBackend {
-                admin_status,
+                admin_status: config,
                 admin_client,
                 credentials,
             }))
@@ -126,7 +122,7 @@ pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
 }
 
 pub struct InfluxDbBackend {
-    admin_status: Value,
+    admin_status: BackendConfig,
     admin_client: Client,
     credentials: Option<(String, String)>,
 }
@@ -134,41 +130,48 @@ pub struct InfluxDbBackend {
 #[async_trait]
 impl Backend for InfluxDbBackend {
     async fn get_admin_status(&self) -> Value {
-        self.admin_status.clone()
+        self.admin_status.to_json_value().into()
     }
 
-    async fn create_storage(&mut self, properties: Properties) -> ZResult<Box<dyn Storage>> {
-        // work on a copy of properties to update them before re-use as admin_status.
-        let mut props = properties.clone();
-
-        let path_expr = props.get(PROP_STORAGE_KEY_EXPR).unwrap();
-        let path_prefix = match props.get(PROP_STORAGE_KEY_PREFIX) {
-            Some(p) => {
-                if !path_expr.starts_with(p) {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "The specified {}={} is not a prefix of {}={}",
-                            PROP_STORAGE_KEY_PREFIX, p, PROP_STORAGE_KEY_EXPR, path_expr
-                        )
-                    });
-                }
-                Some(p.to_string())
-            }
-            None => None,
+    async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
+        let path_expr = config.key_expr.clone();
+        let path_prefix = if config.truncate.is_empty() {
+            None
+        } else if path_expr.starts_with(&config.truncate) {
+            Some(config.truncate.clone())
+        } else {
+            return zerror!(ZErrorKind::Other {
+                descr: format!(
+                    "The specified key_prefix={} is not a prefix of key_expr={}",
+                    &config.truncate, &path_expr
+                )
+            });
         };
-        let on_closure = OnClosure::try_from(&props)?;
-        let (db, createdb) = match (
-            props.get(PROP_STORAGE_DB),
-            props.contains_key(PROP_STORAGE_CREATE_DB),
-        ) {
-            (Some(name), b) => (name.clone(), b),
-            (None, _) => {
-                let name = generate_db_name();
-                // insert generated name in props to be re-exposed in admin_status
-                props.insert(PROP_STORAGE_DB.to_string(), name.clone());
-                // force DB creation, even if not explicitly specified
-                (name, true)
+        let on_closure = match config.rest.get(PROP_STORAGE_ON_CLOSURE) {
+            Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
+            Some(serde_json::Value::String(x)) if x == "drop_db" => OnClosure::DropDb,
+            Some(serde_json::Value::String(x)) if x == "do_nothing" => OnClosure::DoNothing,
+            None => OnClosure::DoNothing,
+            Some(v) => {
+                return zerror!(ZErrorKind::Other {
+                    descr: format!(
+                        r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
+                        PROP_STORAGE_ON_CLOSURE, &config.name
+                    )
+                })
             }
+        };
+        let (db, createdb) = match config.rest.get(PROP_STORAGE_DB) {
+            Some(serde_json::Value::String(s)) => (
+                s.clone(),
+                match config.rest.get(PROP_STORAGE_CREATE_DB) {
+                    None | Some(serde_json::Value::Bool(false)) => false,
+                    Some(serde_json::Value::Bool(true)) => true,
+                    Some(_) => todo!(),
+                },
+            ),
+            None => (generate_db_name(), true),
+            _ => return zerror!(ZErrorKind::Other { descr: format!("") }),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -176,27 +179,22 @@ impl Backend for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
         // Note: remove username/password from properties to not re-expose them in admin_status
         let storage_username = match (
-            props.remove(PROP_STORAGE_USERNAME),
-            props.remove(PROP_STORAGE_PASSWORD),
+            config.rest.remove(PROP_STORAGE_USERNAME),
+            config.rest.remove(PROP_STORAGE_PASSWORD),
         ) {
-            (Some(username), Some(password)) => {
+            (
+                Some(serde_json::Value::String(username)),
+                Some(serde_json::Value::String(password)),
+            ) => {
                 client = client.with_auth(&username, password);
                 Some(username)
             }
             (None, None) => None,
-            (None, _) => {
+            _ => {
                 return zerror!(ZErrorKind::Other {
                     descr: format!(
-                        "Properties for InfluxDb Storage includes '{}' but not '{}",
+                        "Optional properties `{}` and `{}` must coexist and be strings",
                         PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                    )
-                })
-            }
-            (_, None) => {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Properties for InfluxDb Storage includes '{}' but not '{}",
-                        PROP_BACKEND_PASSWORD, PROP_BACKEND_USERNAME
                     )
                 })
             }
@@ -215,8 +213,10 @@ impl Backend for InfluxDbBackend {
         }
 
         // re-insert the actual name of database (in case it has been generated)
-        props.insert(PROP_STORAGE_DB.into(), client.database_name().into());
-        let admin_status = zenoh::properties::properties_to_json_value(&props);
+        config
+            .rest
+            .entry(PROP_STORAGE_DB)
+            .or_insert(db.clone().into());
 
         // The Influx client on database with backend's credentials (admin), to drop measurements and database
         let mut admin_client = Client::new(self.admin_client.database_url(), db);
@@ -225,7 +225,7 @@ impl Backend for InfluxDbBackend {
         }
 
         Ok(Box::new(InfluxDbStorage {
-            admin_status,
+            admin_status: config,
             admin_client,
             client,
             path_prefix,
@@ -234,11 +234,11 @@ impl Backend for InfluxDbBackend {
         }))
     }
 
-    fn incoming_data_interceptor(&self) -> Option<Box<dyn IncomingDataInterceptor>> {
+    fn incoming_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
         None
     }
 
-    fn outgoing_data_interceptor(&self) -> Option<Box<dyn OutgoingDataInterceptor>> {
+    fn outgoing_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
         None
     }
 }
@@ -270,7 +270,7 @@ impl TryFrom<&Properties> for OnClosure {
 }
 
 struct InfluxDbStorage {
-    admin_status: Value,
+    admin_status: StorageConfig,
     admin_client: Client,
     client: Client,
     path_prefix: Option<String>,
@@ -342,7 +342,7 @@ impl InfluxDbStorage {
 impl Storage for InfluxDbStorage {
     async fn get_admin_status(&self) -> Value {
         // TODO: possibly add more properties in returned Value for more information about this storage
-        self.admin_status.clone()
+        self.admin_status.to_json_value().into()
     }
 
     // When receiving a Sample (i.e. on PUT or DELETE operations)
