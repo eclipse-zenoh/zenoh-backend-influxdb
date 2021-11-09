@@ -30,7 +30,9 @@ use zenoh::buf::ZBuf;
 use zenoh::prelude::*;
 use zenoh::time::new_reception_timestamp;
 use zenoh::time::Timestamp;
-use zenoh_backend_traits::config::{BackendConfig, StorageConfig};
+use zenoh_backend_traits::config::{
+    BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
+};
 use zenoh_backend_traits::*;
 use zenoh_util::collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_util::{zerror, zerror2};
@@ -58,8 +60,44 @@ lazy_static::lazy_static!(
 #[allow(dead_code)]
 const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
 
+fn get_credential<'a>(config: &'a BackendConfig, credit: &str) -> ZResult<Option<&'a String>> {
+    match config.rest.get_private(PROP_BACKEND_USERNAME) {
+        PrivacyGetResult::NotFound => Ok(None),
+        PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
+        PrivacyGetResult::Public(serde_json::Value::String(v)) => {
+            log::warn!(
+                r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
+                v,
+                credit,
+                credit,
+                v,
+                credit,
+                v
+            );
+            Ok(Some(v))
+        }
+        PrivacyGetResult::Both {
+            public: serde_json::Value::String(public),
+            private: serde_json::Value::String(private),
+        } => {
+            log::warn!(
+                r#"Value "{}" is given for `{}` publicly, but a private value also exists. The private value will be used, but the public value, which is {}the same as the private one, will still be visible in configurations."#,
+                public,
+                credit,
+                if public == private { "" } else { "not " }
+            );
+            Ok(Some(private))
+        }
+        _ => {
+            return zerror!(ZErrorKind::Other {
+                descr: format!("Optional property `{}` must be a string", credit)
+            })
+        }
+    }
+}
+
 #[no_mangle]
-pub extern "C" fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
+pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
@@ -86,18 +124,18 @@ pub extern "C" fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn B
 
     // Note: remove username/password from properties to not re-expose them in admin_status
     let credentials = match (
-        config.rest.remove(PROP_BACKEND_USERNAME),
-        config.rest.remove(PROP_BACKEND_PASSWORD),
+        get_credential(&config, PROP_BACKEND_USERNAME)?,
+        get_credential(&config, PROP_BACKEND_PASSWORD)?,
     ) {
-        (Some(serde_json::Value::String(username)), Some(serde_json::Value::String(password))) => {
-            admin_client = admin_client.with_auth(&username, &password);
-            Some((username, password))
+        (Some(username), Some(password)) => {
+            admin_client = admin_client.with_auth(username, password);
+            Some((username.clone(), password.clone()))
         }
         (None, None) => None,
         _ => {
             return zerror!(ZErrorKind::Other {
                 descr: format!(
-                    "Optional properties `{}` and `{}` must coexist and be strings",
+                    "Optional properties `{}` and `{}` must coexist",
                     PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
                 )
             })
@@ -152,7 +190,7 @@ impl Backend for InfluxDbBackend {
             Some(serde_json::Value::String(x)) if x == "drop_db" => OnClosure::DropDb,
             Some(serde_json::Value::String(x)) if x == "do_nothing" => OnClosure::DoNothing,
             None => OnClosure::DoNothing,
-            Some(v) => {
+            Some(_) => {
                 return zerror!(ZErrorKind::Other {
                     descr: format!(
                         r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
