@@ -457,7 +457,7 @@ impl Storage for InfluxDbStorage {
         let regex = if let Some(prefix) = &self.path_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
             // the selector, if those keys had the path_prefix.
-            let path_exprs = utils::get_sub_path_exprs(selector.path_expr.as_str(), &prefix);
+            let path_exprs = utils::get_sub_path_exprs(selector.path_expr.as_str(), prefix);
             debug!(
                 "Query on {} with path_expr={} => sub_path_exprs = {:?}",
                 selector.path_expr, prefix, path_exprs
@@ -495,7 +495,7 @@ impl Storage for InfluxDbStorage {
                                 // reconstruct the path from the measurement name (same as serie.name)
                                 let mut res_name = String::with_capacity(serie.name.len());
                                 if let Some(p) = &self.path_prefix {
-                                    res_name.push_str(&p);
+                                    res_name.push_str(p);
                                 }
                                 res_name.push_str(&serie.name);
                                 debug!("Replying {} values for {}", serie.values.len(), res_name);
