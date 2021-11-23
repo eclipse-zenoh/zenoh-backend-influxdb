@@ -386,7 +386,7 @@ impl Storage for InfluxDbStorage {
     // When receiving a Sample (i.e. on PUT or DELETE operations)
     async fn on_sample(&mut self, sample: Sample) -> ZResult<()> {
         // measurement is the path, stripped of the path_prefix if any
-        let mut measurement = sample.res_name.as_str();
+        let mut measurement = sample.key_expr.try_as_str()?;
         if let Some(prefix) = &self.path_prefix {
             measurement = measurement.strip_prefix(prefix).ok_or_else(|| {
                 zerror2!(ZErrorKind::Other {
@@ -408,7 +408,7 @@ impl Storage for InfluxDbStorage {
                 if let Some(del_time) = self.get_deletion_timestamp(measurement).await? {
                     // ignore sample if oldest than the deletion
                     if sample_ts < del_time {
-                        debug!("Received a Sample for {} with timestamp older than its deletion; ignore it", sample.res_name);
+                        debug!("Received a Sample for {} with timestamp older than its deletion; ignore it", sample.key_expr);
                         return Ok(());
                     }
                 }
@@ -430,12 +430,12 @@ impl Storage for InfluxDbStorage {
                         .add_field("encoding_suffix", &*sample.value.encoding.suffix)
                         .add_field("base64", base64)
                         .add_field("value", strvalue);
-                debug!("Put {} with Influx query: {:?}", sample.res_name, query);
+                debug!("Put {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
                     return zerror!(ZErrorKind::Other {
                         descr: format!(
                             "Failed to put Value for {} in InfluxDb storage : {}",
-                            sample.res_name, e
+                            sample.key_expr, e
                         )
                     });
                 }
@@ -447,7 +447,7 @@ impl Storage for InfluxDbStorage {
                     r#"DELETE FROM "{}" WHERE time < {}"#,
                     measurement, influx_time
                 ));
-                debug!("Delete {} with Influx query: {:?}", sample.res_name, query);
+                debug!("Delete {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
                     return zerror!(ZErrorKind::Other {
                         descr: format!(
@@ -469,7 +469,7 @@ impl Storage for InfluxDbStorage {
                     return zerror!(ZErrorKind::Other {
                         descr: format!(
                             "Failed to mark measurement {} as deleted : {}",
-                            sample.res_name, e
+                            sample.key_expr, e
                         )
                     });
                 }
@@ -477,7 +477,7 @@ impl Storage for InfluxDbStorage {
                 let _ = self.schedule_measurement_drop(measurement).await;
             }
             SampleKind::Patch => {
-                println!("Received PATCH for {}: not yet supported", sample.res_name);
+                println!("Received PATCH for {}: not yet supported", sample.key_expr);
             }
         }
         Ok(())
@@ -487,12 +487,12 @@ impl Storage for InfluxDbStorage {
     async fn on_query(&mut self, query: Query) -> ZResult<()> {
         // get the query's Selector
         let selector = query.selector();
-
+        let selector_str = selector.key_selector.try_as_str()?;
         // if a path_prefix is used
         let regex = if let Some(prefix) = &self.path_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
             // the selector, if those keys had the path_prefix.
-            let path_exprs = utils::get_sub_key_selectors(selector.key_selector, prefix);
+            let path_exprs = utils::get_sub_key_selectors(selector_str, prefix);
             debug!(
                 "Query on {} with path_prefix={} => sub_key_selectors = {:?}",
                 selector, prefix, path_exprs
@@ -501,7 +501,7 @@ impl Storage for InfluxDbStorage {
             path_exprs_to_influx_regex(&path_exprs)
         } else {
             // convert the Selector's path expression into an Influx regex
-            path_exprs_to_influx_regex(&[selector.key_selector])
+            path_exprs_to_influx_regex(&[selector_str])
         };
 
         // construct the Influx query clauses from the Selector

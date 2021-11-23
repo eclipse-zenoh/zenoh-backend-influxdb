@@ -2792,9 +2792,9 @@ dependencies = [
 
 [[package]]
 name = "validated_struct"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44e0fae9302755a7ead9ce0096d4dc056b9cef3b0f7fe956f6d1678c38a01180"
+checksum = "85affc53ebb88700a36aefff74b6a4db38dbccf26ec777d40c9e9b471be261f8"
 dependencies = [
  "json5",
  "serde",
@@ -2804,9 +2804,9 @@ dependencies = [
 
 [[package]]
 name = "validated_struct_macros"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c978affcb752e5ad50358512e51b5f772c7310612130f06cb4d97978d2cb325"
+checksum = "ca689f3addec28c7d67ed3139498d0325253c71bf58ef57c2ba76141f7ce576f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3011,7 +3011,7 @@ dependencies = [
 [[package]]
 name = "zenoh"
 version = "0.5.0-dev"
-source = "git+https://github.com/p-avital/zenoh?branch=plugins-config#20d17a075c90af9ad2b3906d426361cc09bc3751"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#5de8519ec810bb9ad5aaa588084c0182b0629306"
 dependencies = [
  "async-global-executor",
  "async-rustls",
@@ -3059,7 +3059,7 @@ dependencies = [
 [[package]]
 name = "zenoh-macros"
 version = "0.5.0-dev"
-source = "git+https://github.com/p-avital/zenoh?branch=plugins-config#20d17a075c90af9ad2b3906d426361cc09bc3751"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#5de8519ec810bb9ad5aaa588084c0182b0629306"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3070,7 +3070,7 @@ dependencies = [
 [[package]]
 name = "zenoh-plugin-trait"
 version = "0.1.0-dev"
-source = "git+https://github.com/p-avital/zenoh?branch=plugins-config#20d17a075c90af9ad2b3906d426361cc09bc3751"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#5de8519ec810bb9ad5aaa588084c0182b0629306"
 dependencies = [
  "libloading",
  "log",
@@ -3081,7 +3081,7 @@ dependencies = [
 [[package]]
 name = "zenoh-util"
 version = "0.5.0-dev"
-source = "git+https://github.com/p-avital/zenoh?branch=plugins-config#20d17a075c90af9ad2b3906d426361cc09bc3751"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#5de8519ec810bb9ad5aaa588084c0182b0629306"
 dependencies = [
  "aes 0.7.5",
  "async-std",
@@ -3133,7 +3133,7 @@ dependencies = [
 [[package]]
 name = "zenoh_backend_traits"
 version = "0.5.0-dev"
-source = "git+https://github.com/p-avital/zenoh?branch=plugins-config#20d17a075c90af9ad2b3906d426361cc09bc3751"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#5de8519ec810bb9ad5aaa588084c0182b0629306"
 dependencies = [
  "anyhow",
  "async-std",
