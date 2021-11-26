@@ -30,12 +30,13 @@ use zenoh::buf::ZBuf;
 use zenoh::prelude::*;
 use zenoh::time::new_reception_timestamp;
 use zenoh::time::Timestamp;
+use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
     BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
 };
 use zenoh_backend_traits::*;
 use zenoh_util::collections::{Timed, TimedEvent, TimedHandle, Timer};
-use zenoh_util::{zerror, zerror2};
+use zenoh_util::{bail, zerror};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -89,9 +90,7 @@ fn get_credential<'a>(config: &'a BackendConfig, credit: &str) -> ZResult<Option
             Ok(Some(private))
         }
         _ => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!("Optional property `{}` must be a string", credit)
-            })
+            bail!("Optional property `{}` must be a string", credit)
         }
     }
 }
@@ -110,12 +109,10 @@ pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
     let url = match config.rest.get(PROP_BACKEND_URL) {
         Some(serde_json::Value::String(url)) => url.clone(),
         _ => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Mandatory property `{}` for InfluxDb Backend must be a string",
-                    PROP_BACKEND_URL
-                )
-            })
+            bail!(
+                "Mandatory property `{}` for InfluxDb Backend must be a string",
+                PROP_BACKEND_URL
+            )
         }
     };
 
@@ -133,12 +130,11 @@ pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
         }
         (None, None) => None,
         _ => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Optional properties `{}` and `{}` must coexist",
-                    PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                )
-            })
+            bail!(
+                "Optional properties `{}` and `{}` must coexist",
+                PROP_BACKEND_USERNAME,
+                PROP_BACKEND_PASSWORD
+            )
         }
     };
 
@@ -153,9 +149,7 @@ pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
                 credentials,
             }))
         }
-        Err(err) => zerror!(ZErrorKind::Other {
-            descr: format!("Failed to create InfluxDb Backend : {}", err)
-        }),
+        Err(err) => bail!("Failed to create InfluxDb Backend : {}", err),
     }
 }
 
@@ -178,12 +172,11 @@ impl Backend for InfluxDbBackend {
         } else if path_expr.starts_with(&config.truncate) {
             Some(config.truncate.clone())
         } else {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "The specified key_prefix={} is not a prefix of key_expr={}",
-                    &config.truncate, &path_expr
-                )
-            });
+            bail!(
+                "The specified key_prefix={} is not a prefix of key_expr={}",
+                &config.truncate,
+                &path_expr
+            )
         };
         let on_closure = match config.rest.get(PROP_STORAGE_ON_CLOSURE) {
             Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
@@ -191,12 +184,11 @@ impl Backend for InfluxDbBackend {
             Some(serde_json::Value::String(x)) if x == "do_nothing" => OnClosure::DoNothing,
             None => OnClosure::DoNothing,
             Some(_) => {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
-                        PROP_STORAGE_ON_CLOSURE, &config.name
-                    )
-                })
+                bail!(
+                    r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
+                    PROP_STORAGE_ON_CLOSURE,
+                    &config.name
+                )
             }
         };
         let (db, createdb) = match config.rest.get(PROP_STORAGE_DB) {
@@ -209,7 +201,7 @@ impl Backend for InfluxDbBackend {
                 },
             ),
             None => (generate_db_name(), true),
-            _ => return zerror!(ZErrorKind::Other { descr: format!("") }),
+            _ => bail!(""),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -229,12 +221,11 @@ impl Backend for InfluxDbBackend {
             }
             (None, None) => None,
             _ => {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Optional properties `{}` and `{}` must coexist and be strings",
-                        PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                    )
-                })
+                bail!(
+                    "Optional properties `{}` and `{}` must coexist and be strings",
+                    PROP_BACKEND_USERNAME,
+                    PROP_BACKEND_PASSWORD
+                )
             }
         };
 
@@ -244,9 +235,7 @@ impl Backend for InfluxDbBackend {
                 // create db using backend's credentials
                 create_db(&self.admin_client, &db, storage_username).await?;
             } else {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!("Database '{}' doesn't exist in InfluxDb", db)
-                });
+                bail!("Database '{}' doesn't exist in InfluxDb", db)
             }
         }
 
@@ -288,7 +277,7 @@ enum OnClosure {
 }
 
 impl TryFrom<&Properties> for OnClosure {
-    type Error = ZError;
+    type Error = zenoh_util::core::Error;
     fn try_from(p: &Properties) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
@@ -297,9 +286,7 @@ impl TryFrom<&Properties> for OnClosure {
                 } else if s == "drop_series" {
                     Ok(OnClosure::DropSeries)
                 } else {
-                    zerror!(ZErrorKind::Other {
-                        descr: format!("Unsupported value for 'on_closure' property: {}", s)
-                    })
+                    bail!("Unsupported value for 'on_closure' property: {}", s)
                 }
             }
             None => Ok(OnClosure::DoNothing),
@@ -335,30 +322,26 @@ impl InfluxDbStorage {
                             .timestamp
                             .parse::<Timestamp>()
                             .map_err(|err| {
-                                zerror2!(ZErrorKind::Other {
-                                    descr: format!(
+                                zerror!(
                                 "Failed to parse the latest timestamp for deletion of measurement {} : {}",
                                 measurement, err.cause)
-                                })
                             })?;
                         Ok(Some(ts))
                     } else {
                         Ok(None)
                     }
                 }
-                Err(err) => zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Failed to get latest timestamp for deletion of measurement {} : {}",
-                        measurement, err
-                    )
-                }),
-            },
-            Err(err) => zerror!(ZErrorKind::Other {
-                descr: format!(
+                Err(err) => bail!(
                     "Failed to get latest timestamp for deletion of measurement {} : {}",
-                    measurement, err
-                )
-            }),
+                    measurement,
+                    err
+                ),
+            },
+            Err(err) => bail!(
+                "Failed to get latest timestamp for deletion of measurement {} : {}",
+                measurement,
+                err
+            ),
         }
     }
 
@@ -389,12 +372,10 @@ impl Storage for InfluxDbStorage {
         let mut measurement = sample.key_expr.try_as_str()?;
         if let Some(prefix) = &self.path_prefix {
             measurement = measurement.strip_prefix(prefix).ok_or_else(|| {
-                zerror2!(ZErrorKind::Other {
-                    descr: format!(
-                        "Received a Sample not starting with path_prefix '{}'",
-                        prefix
-                    )
-                })
+                zerror!(
+                    "Received a Sample not starting with path_prefix '{}'",
+                    prefix
+                )
             })?;
         }
         // Note: assume that uhlc timestamp was generated by a clock using UNIX_EPOCH (that's the case by default)
@@ -432,12 +413,11 @@ impl Storage for InfluxDbStorage {
                         .add_field("value", strvalue);
                 debug!("Put {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to put Value for {} in InfluxDb storage : {}",
-                            sample.key_expr, e
-                        )
-                    });
+                    bail!(
+                        "Failed to put Value for {} in InfluxDb storage : {}",
+                        sample.key_expr,
+                        e
+                    )
                 }
             }
             SampleKind::Delete => {
@@ -449,12 +429,11 @@ impl Storage for InfluxDbStorage {
                 ));
                 debug!("Delete {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to delete points for measurement '{}' from InfluxDb storage : {}",
-                            measurement, e
-                        )
-                    });
+                    bail!(
+                        "Failed to delete points for measurement '{}' from InfluxDb storage : {}",
+                        measurement,
+                        e
+                    )
                 }
                 // store a point (with timestamp) with "delete" tag, thus we don't re-introduce an older point later
                 let query =
@@ -466,12 +445,11 @@ impl Storage for InfluxDbStorage {
                     measurement, influx_time
                 );
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to mark measurement {} as deleted : {}",
-                            sample.key_expr, e
-                        )
-                    });
+                    bail!(
+                        "Failed to mark measurement {} as deleted : {}",
+                        sample.key_expr,
+                        e
+                    )
                 }
                 // schedule the drop of measurement later in the future, if it's empty
                 let _ = self.schedule_measurement_drop(measurement).await;
@@ -575,23 +553,21 @@ impl Storage for InfluxDbStorage {
                             }
                         }
                         Err(e) => {
-                            return zerror!(ZErrorKind::Other {
-                                descr: format!(
-                                    "Failed to parse result of InfluxDB query '{}': {}",
-                                    influx_query_str, e
-                                )
-                            })
+                            bail!(
+                                "Failed to parse result of InfluxDB query '{}': {}",
+                                influx_query_str,
+                                e
+                            )
                         }
                     }
                 }
                 Ok(())
             }
-            Err(e) => zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed to query InfluxDb with '{}' : {}",
-                    influx_query_str, e
-                )
-            }),
+            Err(e) => bail!(
+                "Failed to query InfluxDb with '{}' : {}",
+                influx_query_str,
+                e
+            ),
         }
     }
 }
@@ -721,16 +697,12 @@ async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
                 // not found
                 Ok(false)
             }
-            Err(e) => zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed to parse list of existing InfluxDb databases : {}",
-                    e
-                )
-            }),
+            Err(e) => bail!(
+                "Failed to parse list of existing InfluxDb databases : {}",
+                e
+            ),
         },
-        Err(e) => zerror!(ZErrorKind::Other {
-            descr: format!("Failed to list existing InfluxDb databases : {}", e)
-        }),
+        Err(e) => bail!("Failed to list existing InfluxDb databases : {}", e),
     }
 }
 
@@ -742,12 +714,11 @@ async fn create_db(
     let query = <dyn InfluxQuery>::raw_read_query(format!("CREATE DATABASE {}", db_name));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
-        return zerror!(ZErrorKind::Other {
-            descr: format!(
-                "Failed to create new InfluxDb database '{}' : {}",
-                db_name, e
-            )
-        });
+        bail!(
+            "Failed to create new InfluxDb database '{}' : {}",
+            db_name,
+            e
+        )
     }
 
     // is a username is specified for storage access, grant him access to the database
@@ -759,12 +730,12 @@ async fn create_db(
             username, db_name
         );
         if let Err(e) = client.query(&query).await {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed grant access to {} on Influx database '{}' : {}",
-                    username, db_name, e
-                )
-            });
+            bail!(
+                "Failed grant access to {} on Influx database '{}' : {}",
+                username,
+                db_name,
+                e
+            )
         }
     }
     Ok(())
