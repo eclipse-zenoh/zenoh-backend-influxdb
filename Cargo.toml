@@ -14,10 +14,12 @@
 [package]
 name = "zenoh_backend_influxdb"
 version = "0.5.0-dev"
-authors = ["kydos <angelo@icorsaro.net>",
-           "Julien Enoch <julien@enoch.fr>",
-           "Olivier Hécart <olivier.hecart@adlinktech.com>",
-		   "Luca Cominardi <luca.cominardi@adlinktech.com>"]
+authors = [
+    "kydos <angelo@icorsaro.net>",
+    "Julien Enoch <julien@enoch.fr>",
+    "Olivier Hécart <olivier.hecart@adlinktech.com>",
+    "Luca Cominardi <luca.cominardi@adlinktech.com>",
+]
 edition = "2018"
 
 [lib]
@@ -25,9 +27,9 @@ name = "zbackend_influxdb"
 crate-type = ["cdylib"]
 
 [dependencies]
-zenoh_backend_traits = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
-zenoh = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
-zenoh-util = { git =  "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
+zenoh_backend_traits = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
+zenoh = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
+zenoh-util = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "apis-merge" }
 async-std = "=1.9.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
@@ -39,7 +41,11 @@ uuid = { version = "0.8.2", features = ["v4"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 base64 = "0.13.0"
-influxdb = { version = "0.4", default-features = false, features = ["derive", "use-serde", "h1-client-rustls"] }
+influxdb = { version = "0.4", default-features = false, features = [
+    "derive",
+    "use-serde",
+    "h1-client-rustls",
+] }
 
 [build-dependencies]
 rustc_version = "0.4.0"
