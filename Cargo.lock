@@ -3011,7 +3011,7 @@ dependencies = [
 [[package]]
 name = "zenoh"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#6bec5f62b9d2d222a34916b6ed62b4d727f6e195"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#18309380037d28d7ad6425a42dbd846774f36a60"
 dependencies = [
  "async-global-executor",
  "async-rustls",
@@ -3059,7 +3059,7 @@ dependencies = [
 [[package]]
 name = "zenoh-macros"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#6bec5f62b9d2d222a34916b6ed62b4d727f6e195"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#18309380037d28d7ad6425a42dbd846774f36a60"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3070,7 +3070,7 @@ dependencies = [
 [[package]]
 name = "zenoh-plugin-trait"
 version = "0.1.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#6bec5f62b9d2d222a34916b6ed62b4d727f6e195"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#18309380037d28d7ad6425a42dbd846774f36a60"
 dependencies = [
  "libloading",
  "log",
@@ -3081,9 +3081,10 @@ dependencies = [
 [[package]]
 name = "zenoh-util"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#6bec5f62b9d2d222a34916b6ed62b4d727f6e195"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#18309380037d28d7ad6425a42dbd846774f36a60"
 dependencies = [
  "aes 0.7.5",
+ "anyhow",
  "async-std",
  "async-trait",
  "clap",
@@ -3133,14 +3134,14 @@ dependencies = [
 [[package]]
 name = "zenoh_backend_traits"
 version = "0.5.0-dev"
-source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#6bec5f62b9d2d222a34916b6ed62b4d727f6e195"
+source = "git+https://github.com/eclipse-zenoh/zenoh?branch=apis-merge#18309380037d28d7ad6425a42dbd846774f36a60"
 dependencies = [
- "anyhow",
  "async-std",
  "async-trait",
  "derive_more",
  "serde_json",
  "zenoh",
+ "zenoh-util",
 ]
 
 [[package]]
