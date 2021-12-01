@@ -23,15 +23,20 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zenoh::net::{DataInfo, Sample};
-use zenoh::{
-    Change, ChangeKind, Properties, Selector, Timestamp, Value, ZError, ZErrorKind, ZResult,
+use zenoh::buf::ZBuf;
+use zenoh::prelude::*;
+use zenoh::time::new_reception_timestamp;
+use zenoh::time::Timestamp;
+use zenoh::Result as ZResult;
+use zenoh_backend_traits::config::{
+    BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
 };
 use zenoh_backend_traits::*;
 use zenoh_util::collections::{Timed, TimedEvent, TimedHandle, Timer};
-use zenoh_util::{zerror, zerror2};
+use zenoh_util::{bail, zerror};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -53,26 +58,61 @@ lazy_static::lazy_static!(
     static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
 );
 
+#[allow(dead_code)]
+const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
+
+fn get_credential<'a>(config: &'a BackendConfig, credit: &str) -> ZResult<Option<&'a String>> {
+    match config.rest.get_private(PROP_BACKEND_USERNAME) {
+        PrivacyGetResult::NotFound => Ok(None),
+        PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
+        PrivacyGetResult::Public(serde_json::Value::String(v)) => {
+            log::warn!(
+                r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
+                v,
+                credit,
+                credit,
+                v,
+                credit,
+                v
+            );
+            Ok(Some(v))
+        }
+        PrivacyGetResult::Both {
+            public: serde_json::Value::String(public),
+            private: serde_json::Value::String(private),
+        } => {
+            log::warn!(
+                r#"Value "{}" is given for `{}` publicly, but a private value also exists. The private value will be used, but the public value, which is {}the same as the private one, will still be visible in configurations."#,
+                public,
+                credit,
+                if public == private { "" } else { "not " }
+            );
+            Ok(Some(private))
+        }
+        _ => {
+            bail!("Optional property `{}` must be a string", credit)
+        }
+    }
+}
+
 #[no_mangle]
-pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
+pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
     debug!("InfluxDB backend {}", LONG_VERSION.as_str());
 
-    // work on a copy of properties to update them before re-use as admin_status.
-    let mut props = properties.clone();
-    props.insert("version".into(), LONG_VERSION.clone());
+    config
+        .rest
+        .insert("version".into(), LONG_VERSION.clone().into());
 
-    let url = match props.get(PROP_BACKEND_URL) {
-        Some(url) => url.clone(),
-        None => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Properties for InfluxDb Backend miss '{}'",
-                    PROP_BACKEND_URL
-                )
-            })
+    let url = match config.rest.get(PROP_BACKEND_URL) {
+        Some(serde_json::Value::String(url)) => url.clone(),
+        _ => {
+            bail!(
+                "Mandatory property `{}` for InfluxDb Backend must be a string",
+                PROP_BACKEND_URL
+            )
         }
     };
 
@@ -81,29 +121,20 @@ pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
 
     // Note: remove username/password from properties to not re-expose them in admin_status
     let credentials = match (
-        props.remove(PROP_BACKEND_USERNAME),
-        props.remove(PROP_BACKEND_PASSWORD),
+        get_credential(&config, PROP_BACKEND_USERNAME)?,
+        get_credential(&config, PROP_BACKEND_PASSWORD)?,
     ) {
         (Some(username), Some(password)) => {
-            admin_client = admin_client.with_auth(&username, &password);
-            Some((username, password))
+            admin_client = admin_client.with_auth(username, password);
+            Some((username.clone(), password.clone()))
         }
         (None, None) => None,
-        (None, _) => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Properties for InfluxDb Backend includes '{}' but not '{}",
-                    PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                )
-            })
-        }
-        (_, None) => {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Properties for InfluxDb Backend includes '{}' but not '{}",
-                    PROP_BACKEND_PASSWORD, PROP_BACKEND_USERNAME
-                )
-            })
+        _ => {
+            bail!(
+                "Optional properties `{}` and `{}` must coexist",
+                PROP_BACKEND_USERNAME,
+                PROP_BACKEND_PASSWORD
+            )
         }
     };
 
@@ -111,22 +142,19 @@ pub fn create_backend(properties: &Properties) -> ZResult<Box<dyn Backend>> {
     let admin_client_copy = admin_client.clone();
     match async_std::task::block_on(async move { admin_client_copy.ping().await }) {
         Ok(_) => {
-            props.insert(PROP_BACKEND_TYPE.into(), "InfluxDB".into());
-            let admin_status = zenoh::utils::properties_to_json_value(&props);
+            config.rest.insert("type".into(), "InfluxDB".into());
             Ok(Box::new(InfluxDbBackend {
-                admin_status,
+                admin_status: config,
                 admin_client,
                 credentials,
             }))
         }
-        Err(err) => zerror!(ZErrorKind::Other {
-            descr: format!("Failed to create InfluxDb Backend : {}", err)
-        }),
+        Err(err) => bail!("Failed to create InfluxDb Backend : {}", err),
     }
 }
 
 pub struct InfluxDbBackend {
-    admin_status: Value,
+    admin_status: BackendConfig,
     admin_client: Client,
     credentials: Option<(String, String)>,
 }
@@ -134,41 +162,46 @@ pub struct InfluxDbBackend {
 #[async_trait]
 impl Backend for InfluxDbBackend {
     async fn get_admin_status(&self) -> Value {
-        self.admin_status.clone()
+        self.admin_status.to_json_value().into()
     }
 
-    async fn create_storage(&mut self, properties: Properties) -> ZResult<Box<dyn Storage>> {
-        // work on a copy of properties to update them before re-use as admin_status.
-        let mut props = properties.clone();
-
-        let path_expr = props.get(PROP_STORAGE_PATH_EXPR).unwrap();
-        let path_prefix = match props.get(PROP_STORAGE_PATH_PREFIX) {
-            Some(p) => {
-                if !path_expr.starts_with(p) {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "The specified {}={} is not a prefix of {}={}",
-                            PROP_STORAGE_PATH_PREFIX, p, PROP_STORAGE_PATH_EXPR, path_expr
-                        )
-                    });
-                }
-                Some(p.to_string())
-            }
-            None => None,
+    async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
+        let path_expr = config.key_expr.clone();
+        let path_prefix = if config.truncate.is_empty() {
+            None
+        } else if path_expr.starts_with(&config.truncate) {
+            Some(config.truncate.clone())
+        } else {
+            bail!(
+                "The specified key_prefix={} is not a prefix of key_expr={}",
+                &config.truncate,
+                &path_expr
+            )
         };
-        let on_closure = OnClosure::try_from(&props)?;
-        let (db, createdb) = match (
-            props.get(PROP_STORAGE_DB),
-            props.contains_key(PROP_STORAGE_CREATE_DB),
-        ) {
-            (Some(name), b) => (name.clone(), b),
-            (None, _) => {
-                let name = generate_db_name();
-                // insert generated name in props to be re-exposed in admin_status
-                props.insert(PROP_STORAGE_DB.to_string(), name.clone());
-                // force DB creation, even if not explicitly specified
-                (name, true)
+        let on_closure = match config.rest.get(PROP_STORAGE_ON_CLOSURE) {
+            Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
+            Some(serde_json::Value::String(x)) if x == "drop_db" => OnClosure::DropDb,
+            Some(serde_json::Value::String(x)) if x == "do_nothing" => OnClosure::DoNothing,
+            None => OnClosure::DoNothing,
+            Some(_) => {
+                bail!(
+                    r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
+                    PROP_STORAGE_ON_CLOSURE,
+                    &config.name
+                )
             }
+        };
+        let (db, createdb) = match config.rest.get(PROP_STORAGE_DB) {
+            Some(serde_json::Value::String(s)) => (
+                s.clone(),
+                match config.rest.get(PROP_STORAGE_CREATE_DB) {
+                    None | Some(serde_json::Value::Bool(false)) => false,
+                    Some(serde_json::Value::Bool(true)) => true,
+                    Some(_) => todo!(),
+                },
+            ),
+            None => (generate_db_name(), true),
+            _ => bail!(""),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -176,29 +209,23 @@ impl Backend for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
         // Note: remove username/password from properties to not re-expose them in admin_status
         let storage_username = match (
-            props.remove(PROP_STORAGE_USERNAME),
-            props.remove(PROP_STORAGE_PASSWORD),
+            config.rest.remove(PROP_STORAGE_USERNAME),
+            config.rest.remove(PROP_STORAGE_PASSWORD),
         ) {
-            (Some(username), Some(password)) => {
+            (
+                Some(serde_json::Value::String(username)),
+                Some(serde_json::Value::String(password)),
+            ) => {
                 client = client.with_auth(&username, password);
                 Some(username)
             }
             (None, None) => None,
-            (None, _) => {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Properties for InfluxDb Storage includes '{}' but not '{}",
-                        PROP_BACKEND_USERNAME, PROP_BACKEND_PASSWORD
-                    )
-                })
-            }
-            (_, None) => {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Properties for InfluxDb Storage includes '{}' but not '{}",
-                        PROP_BACKEND_PASSWORD, PROP_BACKEND_USERNAME
-                    )
-                })
+            _ => {
+                bail!(
+                    "Optional properties `{}` and `{}` must coexist and be strings",
+                    PROP_BACKEND_USERNAME,
+                    PROP_BACKEND_PASSWORD
+                )
             }
         };
 
@@ -208,15 +235,15 @@ impl Backend for InfluxDbBackend {
                 // create db using backend's credentials
                 create_db(&self.admin_client, &db, storage_username).await?;
             } else {
-                return zerror!(ZErrorKind::Other {
-                    descr: format!("Database '{}' doesn't exist in InfluxDb", db)
-                });
+                bail!("Database '{}' doesn't exist in InfluxDb", db)
             }
         }
 
         // re-insert the actual name of database (in case it has been generated)
-        props.insert(PROP_STORAGE_DB.into(), client.database_name().into());
-        let admin_status = zenoh::utils::properties_to_json_value(&props);
+        config
+            .rest
+            .entry(PROP_STORAGE_DB)
+            .or_insert(db.clone().into());
 
         // The Influx client on database with backend's credentials (admin), to drop measurements and database
         let mut admin_client = Client::new(self.admin_client.database_url(), db);
@@ -225,7 +252,7 @@ impl Backend for InfluxDbBackend {
         }
 
         Ok(Box::new(InfluxDbStorage {
-            admin_status,
+            admin_status: config,
             admin_client,
             client,
             path_prefix,
@@ -234,11 +261,11 @@ impl Backend for InfluxDbBackend {
         }))
     }
 
-    fn incoming_data_interceptor(&self) -> Option<Box<dyn IncomingDataInterceptor>> {
+    fn incoming_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
         None
     }
 
-    fn outgoing_data_interceptor(&self) -> Option<Box<dyn OutgoingDataInterceptor>> {
+    fn outgoing_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
         None
     }
 }
@@ -250,7 +277,7 @@ enum OnClosure {
 }
 
 impl TryFrom<&Properties> for OnClosure {
-    type Error = ZError;
+    type Error = zenoh_util::core::Error;
     fn try_from(p: &Properties) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
@@ -259,9 +286,7 @@ impl TryFrom<&Properties> for OnClosure {
                 } else if s == "drop_series" {
                     Ok(OnClosure::DropSeries)
                 } else {
-                    zerror!(ZErrorKind::Other {
-                        descr: format!("Unsupported value for 'on_closure' property: {}", s)
-                    })
+                    bail!("Unsupported value for 'on_closure' property: {}", s)
                 }
             }
             None => Ok(OnClosure::DoNothing),
@@ -270,7 +295,7 @@ impl TryFrom<&Properties> for OnClosure {
 }
 
 struct InfluxDbStorage {
-    admin_status: Value,
+    admin_status: StorageConfig,
     admin_client: Client,
     client: Client,
     path_prefix: Option<String>,
@@ -297,30 +322,26 @@ impl InfluxDbStorage {
                             .timestamp
                             .parse::<Timestamp>()
                             .map_err(|err| {
-                                zerror2!(ZErrorKind::Other {
-                                    descr: format!(
+                                zerror!(
                                 "Failed to parse the latest timestamp for deletion of measurement {} : {}",
                                 measurement, err.cause)
-                                })
                             })?;
                         Ok(Some(ts))
                     } else {
                         Ok(None)
                     }
                 }
-                Err(err) => zerror!(ZErrorKind::Other {
-                    descr: format!(
-                        "Failed to get latest timestamp for deletion of measurement {} : {}",
-                        measurement, err
-                    )
-                }),
-            },
-            Err(err) => zerror!(ZErrorKind::Other {
-                descr: format!(
+                Err(err) => bail!(
                     "Failed to get latest timestamp for deletion of measurement {} : {}",
-                    measurement, err
-                )
-            }),
+                    measurement,
+                    err
+                ),
+            },
+            Err(err) => bail!(
+                "Failed to get latest timestamp for deletion of measurement {} : {}",
+                measurement,
+                err
+            ),
         }
     }
 
@@ -342,48 +363,42 @@ impl InfluxDbStorage {
 impl Storage for InfluxDbStorage {
     async fn get_admin_status(&self) -> Value {
         // TODO: possibly add more properties in returned Value for more information about this storage
-        self.admin_status.clone()
+        self.admin_status.to_json_value().into()
     }
 
     // When receiving a Sample (i.e. on PUT or DELETE operations)
     async fn on_sample(&mut self, sample: Sample) -> ZResult<()> {
-        let change = Change::from_sample(sample, false)?;
-
         // measurement is the path, stripped of the path_prefix if any
-        let mut measurement = change.path.as_str();
+        let mut measurement = sample.key_expr.try_as_str()?;
         if let Some(prefix) = &self.path_prefix {
             measurement = measurement.strip_prefix(prefix).ok_or_else(|| {
-                zerror2!(ZErrorKind::Other {
-                    descr: format!(
-                        "Received a Sample not starting with path_prefix '{}'",
-                        prefix
-                    )
-                })
+                zerror!(
+                    "Received a Sample not starting with path_prefix '{}'",
+                    prefix
+                )
             })?;
         }
         // Note: assume that uhlc timestamp was generated by a clock using UNIX_EPOCH (that's the case by default)
-        let influx_time = change.timestamp.get_time().to_duration().as_nanos();
+        let sample_ts = sample.timestamp.unwrap_or_else(new_reception_timestamp);
+        let influx_time = sample_ts.get_time().to_duration().as_nanos();
 
         // Store or delete the sample depending the ChangeKind
-        match change.kind {
-            ChangeKind::Put => {
+        match sample.kind {
+            SampleKind::Put => {
                 // get timestamp of deletion of this measurement, if any
                 if let Some(del_time) = self.get_deletion_timestamp(measurement).await? {
                     // ignore sample if oldest than the deletion
-                    if change.timestamp < del_time {
-                        debug!("Received a Sample for {} with timestamp older than its deletion; ignore it", change.path);
+                    if sample_ts < del_time {
+                        debug!("Received a Sample for {} with timestamp older than its deletion; ignore it", sample.key_expr);
                         return Ok(());
                     }
                 }
 
-                // check that there is a value for this PUT sample
-                if change.value.is_none() {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!("Received a PUT Sample without value for {}", change.path)
-                    });
-                }
-                // encode the value as a string to be stored in InfluxDB
-                let (encoding, base64, value) = change.value.unwrap().encode_to_string();
+                // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
+                let (base64, strvalue) = match String::from_utf8(sample.value.payload.to_vec()) {
+                    Ok(s) => (false, s),
+                    Err(err) => (true, base64::encode(err.into_bytes())),
+                };
 
                 // Note: tags are stored as strings in InfluxDB, while fileds are typed.
                 // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
@@ -391,58 +406,56 @@ impl Storage for InfluxDbStorage {
                 let query =
                     InfluxWQuery::new(InfluxTimestamp::Nanoseconds(influx_time), measurement)
                         .add_tag("kind", "PUT")
-                        .add_field("timestamp", change.timestamp.to_string())
-                        .add_field("encoding", encoding)
+                        .add_field("timestamp", sample_ts.to_string())
+                        .add_field("encoding_prefix", sample.value.encoding.prefix)
+                        .add_field("encoding_suffix", &*sample.value.encoding.suffix)
                         .add_field("base64", base64)
-                        .add_field("value", value);
-                debug!("Put {} with Influx query: {:?}", change.path, query);
+                        .add_field("value", strvalue);
+                debug!("Put {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to put Value for {} in InfluxDb storage : {}",
-                            change.path, e
-                        )
-                    });
+                    bail!(
+                        "Failed to put Value for {} in InfluxDb storage : {}",
+                        sample.key_expr,
+                        e
+                    )
                 }
             }
-            ChangeKind::Delete => {
+            SampleKind::Delete => {
                 // delete all points from the measurement that are older than this DELETE message
                 // (in case more recent PUT have been recevived un-ordered)
                 let query = <dyn InfluxQuery>::raw_read_query(format!(
                     r#"DELETE FROM "{}" WHERE time < {}"#,
                     measurement, influx_time
                 ));
-                debug!("Delete {} with Influx query: {:?}", change.path, query);
+                debug!("Delete {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to delete points for measurement '{}' from InfluxDb storage : {}",
-                            measurement, e
-                        )
-                    });
+                    bail!(
+                        "Failed to delete points for measurement '{}' from InfluxDb storage : {}",
+                        measurement,
+                        e
+                    )
                 }
                 // store a point (with timestamp) with "delete" tag, thus we don't re-introduce an older point later
                 let query =
                     InfluxWQuery::new(InfluxTimestamp::Nanoseconds(influx_time), measurement)
-                        .add_field("timestamp", change.timestamp.to_string())
+                        .add_field("timestamp", sample_ts.to_string())
                         .add_tag("kind", "DEL");
                 debug!(
                     "Mark measurement {} as deleted at time {}",
                     measurement, influx_time
                 );
                 if let Err(e) = self.client.query(&query).await {
-                    return zerror!(ZErrorKind::Other {
-                        descr: format!(
-                            "Failed to mark measurement {} as deleted : {}",
-                            change.path, e
-                        )
-                    });
+                    bail!(
+                        "Failed to mark measurement {} as deleted : {}",
+                        sample.key_expr,
+                        e
+                    )
                 }
                 // schedule the drop of measurement later in the future, if it's empty
                 let _ = self.schedule_measurement_drop(measurement).await;
             }
-            ChangeKind::Patch => {
-                println!("Received PATCH for {}: not yet supported", change.path);
+            SampleKind::Patch => {
+                println!("Received PATCH for {}: not yet supported", sample.key_expr);
             }
         }
         Ok(())
@@ -451,26 +464,26 @@ impl Storage for InfluxDbStorage {
     // When receiving a Query (i.e. on GET operations)
     async fn on_query(&mut self, query: Query) -> ZResult<()> {
         // get the query's Selector
-        let selector = Selector::try_from(&query)?;
-
+        let selector = query.selector();
+        let selector_str = selector.key_selector.try_as_str()?;
         // if a path_prefix is used
         let regex = if let Some(prefix) = &self.path_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
             // the selector, if those keys had the path_prefix.
-            let path_exprs = utils::get_sub_path_exprs(selector.path_expr.as_str(), prefix);
+            let path_exprs = utils::get_sub_key_selectors(selector_str, prefix);
             debug!(
-                "Query on {} with path_expr={} => sub_path_exprs = {:?}",
-                selector.path_expr, prefix, path_exprs
+                "Query on {} with path_prefix={} => sub_key_selectors = {:?}",
+                selector, prefix, path_exprs
             );
             // convert the sub-path expressions into an Influx regex
             path_exprs_to_influx_regex(&path_exprs)
         } else {
             // convert the Selector's path expression into an Influx regex
-            path_exprs_to_influx_regex(&[selector.path_expr.as_str()])
+            path_exprs_to_influx_regex(&[selector_str])
         };
 
         // construct the Influx query clauses from the Selector
-        let clauses = clauses_from_selector(&selector);
+        let clauses = clauses_from_selector(&selector)?;
 
         // the Influx query
         let influx_query_str = format!("SELECT * FROM {} {}", regex, clauses);
@@ -481,7 +494,8 @@ impl Storage for InfluxDbStorage {
         struct ZenohPoint {
             kind: String,
             timestamp: String,
-            encoding: zenoh::net::ZInt,
+            encoding_prefix: ZInt,
+            encoding_suffix: String,
             base64: bool,
             value: String,
         }
@@ -500,59 +514,60 @@ impl Storage for InfluxDbStorage {
                                 res_name.push_str(&serie.name);
                                 debug!("Replying {} values for {}", serie.values.len(), res_name);
                                 for zpoint in serie.values {
-                                    // decode the value and the timestamp
-                                    match (
-                                        Value::decode_from_string(
-                                            zpoint.encoding,
-                                            zpoint.base64,
-                                            zpoint.value,
-                                        ),
-                                        Timestamp::from_str(&zpoint.timestamp),
-                                    ) {
-                                        (Ok(value), Ok(timestamp)) => {
-                                            let (encoding, payload) = value.encode();
-                                            let mut info = DataInfo::new();
-                                            info.encoding = Some(encoding);
-                                            info.timestamp = Some(timestamp);
-                                            let data_info = Some(info);
-                                            query
-                                                .reply(Sample {
-                                                    res_name: res_name.clone(),
-                                                    payload,
-                                                    data_info,
-                                                })
-                                                .await;
+                                    let encoding = Encoding {
+                                        prefix: zpoint.encoding_prefix,
+                                        suffix: zpoint.encoding_suffix.into(),
+                                    };
+                                    let payload = if zpoint.base64 {
+                                        match base64::decode(zpoint.value) {
+                                            Ok(v) => ZBuf::from(v),
+                                            Err(e) => {
+                                                warn!(
+                                                    r#"Failed to decode zenoh base64 Value from Influx point {} with timestamp="{}": {}"#,
+                                                    serie.name, zpoint.timestamp, e
+                                                );
+                                                continue;
+                                            }
                                         }
-                                        (Err(e), _) => warn!(
-                                            r#"Failed to decode zenoh Value from Influx point {} with timestamp="{}": {}"#,
-                                            serie.name, zpoint.timestamp, e
-                                        ),
-                                        (_, Err(e)) => warn!(
-                                            r#"Failed to decode zenoh Timestamp from Influx point {} with timestamp="{}": {:?}"#,
-                                            serie.name, zpoint.timestamp, e
-                                        ),
-                                    }
+                                    } else {
+                                        ZBuf::from(zpoint.value.into_bytes())
+                                    };
+                                    let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
+                                        Ok(t) => t,
+                                        Err(e) => {
+                                            warn!(
+                                                r#"Failed to decode zenoh Timestamp from Influx point {} with timestamp="{}": {:?}"#,
+                                                serie.name, zpoint.timestamp, e
+                                            );
+                                            continue;
+                                        }
+                                    };
+                                    let value = Value { payload, encoding };
+                                    query
+                                        .reply(
+                                            Sample::new(res_name.clone(), value)
+                                                .with_timestamp(timestamp),
+                                        )
+                                        .await;
                                 }
                             }
                         }
                         Err(e) => {
-                            return zerror!(ZErrorKind::Other {
-                                descr: format!(
-                                    "Failed to parse result of InfluxDB query '{}': {}",
-                                    influx_query_str, e
-                                )
-                            })
+                            bail!(
+                                "Failed to parse result of InfluxDB query '{}': {}",
+                                influx_query_str,
+                                e
+                            )
                         }
                     }
                 }
                 Ok(())
             }
-            Err(e) => zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed to query InfluxDb with '{}' : {}",
-                    influx_query_str, e
-                )
-            }),
+            Err(e) => bail!(
+                "Failed to query InfluxDb with '{}' : {}",
+                influx_query_str,
+                e
+            ),
         }
     }
 }
@@ -682,16 +697,12 @@ async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
                 // not found
                 Ok(false)
             }
-            Err(e) => zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed to parse list of existing InfluxDb databases : {}",
-                    e
-                )
-            }),
+            Err(e) => bail!(
+                "Failed to parse list of existing InfluxDb databases : {}",
+                e
+            ),
         },
-        Err(e) => zerror!(ZErrorKind::Other {
-            descr: format!("Failed to list existing InfluxDb databases : {}", e)
-        }),
+        Err(e) => bail!("Failed to list existing InfluxDb databases : {}", e),
     }
 }
 
@@ -703,12 +714,11 @@ async fn create_db(
     let query = <dyn InfluxQuery>::raw_read_query(format!("CREATE DATABASE {}", db_name));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
-        return zerror!(ZErrorKind::Other {
-            descr: format!(
-                "Failed to create new InfluxDb database '{}' : {}",
-                db_name, e
-            )
-        });
+        bail!(
+            "Failed to create new InfluxDb database '{}' : {}",
+            db_name,
+            e
+        )
     }
 
     // is a username is specified for storage access, grant him access to the database
@@ -720,12 +730,12 @@ async fn create_db(
             username, db_name
         );
         if let Err(e) = client.query(&query).await {
-            return zerror!(ZErrorKind::Other {
-                descr: format!(
-                    "Failed grant access to {} on Influx database '{}' : {}",
-                    username, db_name, e
-                )
-            });
+            bail!(
+                "Failed grant access to {} on Influx database '{}' : {}",
+                username,
+                db_name,
+                e
+            )
         }
     }
     Ok(())
@@ -764,10 +774,14 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
     result
 }
 
-fn clauses_from_selector(s: &Selector) -> String {
+fn clauses_from_selector(s: &Selector) -> ZResult<String> {
+    let value_selector = s.parse_value_selector()?;
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
-    match (s.properties.get("starttime"), s.properties.get("stoptime")) {
+    match (
+        value_selector.properties.get("starttime"),
+        value_selector.properties.get("stoptime"),
+    ) {
         (Some(start), Some(stop)) => {
             result.push_str(" AND time >= ");
             result.push_str(&normalize_rfc3339(start));
@@ -787,7 +801,7 @@ fn clauses_from_selector(s: &Selector) -> String {
             result.push_str(" ORDER BY time DESC LIMIT 1");
         }
     }
-    result
+    Ok(result)
 }
 
 // Surrounds with `''` all parts of `time` matching a RFC3339 time representation
