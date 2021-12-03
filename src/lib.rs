@@ -492,6 +492,7 @@ impl Storage for InfluxDbStorage {
         // the expected JSon type resulting from the query
         #[derive(Deserialize, Debug)]
         struct ZenohPoint {
+            #[allow(dead_code)]
             kind: String,
             timestamp: String,
             encoding_prefix: ZInt,
