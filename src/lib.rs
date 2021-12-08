@@ -167,14 +167,14 @@ impl Backend for InfluxDbBackend {
 
     async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
         let path_expr = config.key_expr.clone();
-        let path_prefix = if config.truncate.is_empty() {
+        let path_prefix = if config.strip_prefix.is_empty() {
             None
-        } else if path_expr.starts_with(&config.truncate) {
-            Some(config.truncate.clone())
+        } else if path_expr.starts_with(&config.strip_prefix) {
+            Some(config.strip_prefix.clone())
         } else {
             bail!(
-                "The specified key_prefix={} is not a prefix of key_expr={}",
-                &config.truncate,
+                "The specified strip_prefix={} is not a prefix of key_expr={}",
+                &config.strip_prefix,
                 &path_expr
             )
         };
@@ -354,7 +354,7 @@ impl InfluxDbStorage {
             },
         );
         let handle = event.get_handle();
-        self.timer.add(event).await;
+        self.timer.add_async(event).await;
         handle
     }
 }
@@ -493,6 +493,7 @@ impl Storage for InfluxDbStorage {
         #[derive(Deserialize, Debug)]
         struct ZenohPoint {
             #[allow(dead_code)]
+            // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
             kind: String,
             timestamp: String,
             encoding_prefix: ZInt,
