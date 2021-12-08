@@ -129,8 +129,10 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0 # NOTE: get all history for git-version crate to correctly compute a version
-
+          fetch-depth: 500 # NOTE: get long history for git-version crate to correctly compute a version
+      - name: Fetch Git tags # NOTE: workaround for https://github.com/actions/checkout/issues/290
+        shell: bash
+        run: git fetch --tags --force
       - name: Install prerequisites
         shell: bash
         run: |
@@ -190,14 +192,14 @@ jobs:
         shell: bash
         run: |
           TARGET=${{ matrix.job.target }}
-          MAIN_PKG_NAME="zenoh-backend-influxdb-${{ needs.checks.outputs.PKG_VERSION }}-${TARGET}.zip"
-          DEBS_PKG_NAME="zenoh-backend-influxdb-${{ needs.checks.outputs.PKG_VERSION }}-${TARGET}-deb-pkgs.zip"
+          MAIN_PKG_NAME="${GITHUB_WORKSPACE}/zenoh-backend-influxdb-${{ needs.checks.outputs.PKG_VERSION }}-${TARGET}.zip"
+          DEBS_PKG_NAME="${GITHUB_WORKSPACE}/zenoh-backend-influxdb-${{ needs.checks.outputs.PKG_VERSION }}-${TARGET}-deb-pkgs.zip"
 
           case ${TARGET} in
             *linux*)
               cd "target/${TARGET}/release/"
               echo "Packaging ${MAIN_PKG_NAME}:"
-              zip ../../../${MAIN_PKG_NAME} *.so
+              zip ${MAIN_PKG_NAME} *.so
               cd -
               echo ::set-output name=MAIN_PKG_NAME::"${MAIN_PKG_NAME}"
 
@@ -205,7 +207,7 @@ jobs:
               if [[ -d target/${TARGET}/debian ]]; then
                 cd target/${TARGET}/debian
                 echo "Packaging ${DEBS_PKG_NAME}:"
-                zip ../../../${DEBS_PKG_NAME} *.deb
+                zip ${DEBS_PKG_NAME} *.deb
                 cd -
                 echo ::set-output name=DEBS_PKG_NAME::"${DEBS_PKG_NAME}"
               fi
@@ -213,14 +215,14 @@ jobs:
             *apple*)
               cd "target/${TARGET}/release/"
               echo "Packaging ${MAIN_PKG_NAME}:"
-              zip ../../../${MAIN_PKG_NAME} *.dylib
+              zip ${MAIN_PKG_NAME} *.dylib
               cd -
               echo ::set-output name=MAIN_PKG_NAME::"${MAIN_PKG_NAME}"
               ;;
             *windows*)
               cd "target/${TARGET}/release/"
               echo "Packaging ${MAIN_PKG_NAME}:"
-              7z -y a "../../../${MAIN_PKG_NAME}"  *.dll
+              7z -y a "${MAIN_PKG_NAME}"  *.dll
               cd -
               echo ::set-output name=MAIN_PKG_NAME::"${MAIN_PKG_NAME}"
               ;;
