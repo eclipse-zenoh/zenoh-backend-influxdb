@@ -36,7 +36,7 @@ Prerequisites:
 
 You can setup storages either at zenoh router startup via a configuration file, either at runtime via the zenoh admin space, using for instance the REST API.
 
-### **Setup via a JSON configuration file**
+### **Setup via a JSON5 configuration file**
 
   - Create a `zenoh.json5` configuration file containing:
     ```json5
@@ -54,6 +54,9 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 demo: {
                   // the key expression this storage will subscribes to
                   key_expr: "/demo/example/**",
+                  // this prefix will be stripped from the received key when converting to database key.
+                  // i.e.: "/demo/example/a/b" will be stored as "a/b"
+                  strip_prefix: "/demo/example",
                   // the database name within InfluxDB
                   db: "zenoh_example",
                   // if the database doesn't exist, create it
@@ -97,7 +100,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
    docker-compose up -d
    ```
  - Run the `curl` commands above, replacing the URL to InfluxDB with `http://influxdb:8086` (instead of localhost)
--->Ò
+-->
 
 -------------------------------
 ## **Properties for Backend creation**
