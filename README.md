@@ -15,23 +15,67 @@ This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxd
 to implement the storages.
 Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
 
-:point_right: **Download:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
+:point_right: **Download stable versions:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
+
+:point_right: **Build "master" branch:** see [below](#How-to-build-it)
+
+-------------------------------
+## :warning: Documentation for previous 0.5 versions:
+The following documentation related to the version currently in development in "master" branch: 0.6.x.
+
+For previous versions see the README and code of the corresponding tagged version:
+ - [0.5.0-beta.9](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/tree/0.5.0-beta.9#readme)
+ - [0.5.0-beta.8](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/tree/0.5.0-beta.8#readme)
 
 -------------------------------
 ## **Examples of usage**
 
 Prerequisites:
- - You have a zenoh router running, and the `zbackend_influxdb` library file is available in `~/.zenoh/lib`.
+ - You have a zenoh router (`zenohd`) installed, and the `zbackend_influxdb` library file is available in `~/.zenoh/lib`.
  - You have an InfluxDB service running and listening on `http://localhost:8086`
 
-Using `curl` on the zenoh router to add backend and storages:
+You can setup storages either at zenoh router startup via a configuration file, either at runtime via the zenoh admin space, using for instance the REST API.
+
+### **Setup via a JSON configuration file**
+
+  - Create a `zenoh.json5` configuration file containing:
+    ```json5
+    {
+      plugins: {
+        // configuration of "storages" plugin:
+        storages: {
+          backends: {
+            // configuration of a "influxdb" backend (the "zbackend_influxdb" library will be loaded at startup)
+            influxdb: {
+              // URL to the InfluxDB service
+              url: "http://localhost:8086",
+              storages: {
+                // configuration of a "demo" storage using the "influxdb" backend
+                demo: {
+                  // the key expression this storage will subscribes to
+                  key_expr: "/demo/example/**",
+                  // the database name within InfluxDB
+                  db: "zenoh_example",
+                  // if the database doesn't exist, create it
+                  create_db: true
+    } } } } } } }
+    ```
+  - Run the zenoh router with:  
+    `zenohd -c zenoh.json5`
+
+### **Setup at runtime via `curl` commands on the admin space**
+
+  - Run the zenoh router without any specific configuration, but loading the storages plugin:  
+    `zenohd -P storages`
+  - Add the "influxdbn" backend (the "zbackend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
+    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storages/backends/influxdb`
+ - Add the "demo" storage using the "influxdb" backend:
+   `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"/demo/example/**",db:"zenoh_example",create_db:true}' http://localhost:8000/@/router/local/config/plugins/storages/backends/influxdb/storages/demo`
+
+### **Tests using the REST API**
+
+Using `curl` to publish and query keys/values, you can:
 ```bash
-# Add a backend connected to InfluxDB service on http://localhost:8086
-curl -X PUT -H 'content-type:application/properties' -d "url=http://localhost:8086" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb
-
-# Add a storage on /demo/example/** using the database named "zenoh_example", creating it if not already existing
-curl -X PUT -H 'content-type:application/properties' -d "key_expr=/demo/example/**;db=zenoh_example;create_db" http://localhost:8000/@/router/local/plugin/storages/backend/influxdb/storage/example
-
 # Put some values at different time intervals
 curl -X PUT -d "TEST-1" http://localhost:8000/demo/example/test
 curl -X PUT -d "TEST-2" http://localhost:8000/demo/example/test
@@ -41,6 +85,9 @@ curl -X PUT -d "TEST-3" http://localhost:8000/demo/example/test
 curl http://localhost:8000/demo/example/test?(starttime=0)
 ```
 
+<!-- TODO: after release of eclipse/zenoh:0.6.0 update wrt. conf file and uncomment this:
+
+### **Usage with `eclipse/zenoh` Docker image**
 Alternatively, you can test running both the zenoh router and the InfluxDB service in Docker containers:
  - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/master/docker-compose.yml) file
  - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzbackend_influxdb.so` library
@@ -50,7 +97,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
    docker-compose up -d
    ```
  - Run the `curl` commands above, replacing the URL to InfluxDB with `http://influxdb:8086` (instead of localhost)
-
+-->Ò
 
 -------------------------------
 ## **Properties for Backend creation**
@@ -63,14 +110,13 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 
 - **`"password"`** (optional) : the admin user's password.
 
-
 -------------------------------
 ## **Properties for Storage creation**
 
 - **`"key_expr"`** (**required**) : the Storage's [Key Expression](../abstractions#key-expression)
 
-- **`"key_prefix"`** (optional) : a prefix of the `"key_expr"` that will be stripped from each key to store.  
-  _Example: with `"key_expr"="/demo/example/**"` and `"key_prefix"="/demo/example/"` the key `"/demo/example/foo/bar"` will be stored as key: `"foo/bar"`. But replying to a get on `"/demo/**"`, the key `"foo/bar"` will be transformed back to the original key (`"/demo/example/foo/bar"`)._
+- **`"strip_prefix"`** (optional) : a prefix of the `"key_expr"` that will be stripped from each key to store.  
+  _Example: with `"key_expr"="/demo/example/**"` and `"strip_prefix"="/demo/example/"` the key `"/demo/example/foo/bar"` will be stored as key: `"foo/bar"`. But replying to a get on `"/demo/**"`, the key `"foo/bar"` will be transformed back to the original key (`"/demo/example/foo/bar"`)._
 
 - **`"db"`** (optional) : the InfluxDB database name the storage will map into. If not specified, a random name will be generated, and the corresponding database will be created (even if `"create_db"` is not set).
 
@@ -94,7 +140,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 Each **storage** will map to an InfluxDB **database**.  
 Each **key** to store will map to a an InfluxDB
 [**measurement**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#measurement)
-named with the key stripped from the `"key_prefix"` property (see below).  
+named with the key stripped from the `"strip_prefix"` property (see below).  
 Each **key/value** put into the storage will map to an InfluxDB
 [**point**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#point) reusing the timestamp set by zenoh
 (but with a precision of nanoseconds). The fileds and tags of the point is are the following:
@@ -143,15 +189,13 @@ To know the Rust version you're `zenohd` has been built with, use the `--version
 Example:
 ```bash
 $ zenohd --version
-The zenoh router v0.5.0-beta.5-134-g81e85d7 built with rustc 1.51.0-nightly (2987785df 2020-12-28)
+The zenoh router v0.6.0-dev-24-g1f20c86 built with rustc 1.57.0 (f1edd0429 2021-11-29)
 ```
-Here, `zenohd` has been built with the rustc version `1.51.0-nightly` built on 2020-12-28.  
-A nightly build of rustc is included in the **Rustup** nightly toolchain the day after.
-Thus you'll need to install to toolchain **`nightly-2020-12-29`**
+Here, `zenohd` has been built with the rustc version `1.57.0`.  
 Install and use this toolchain with the following command:
 
 ```bash
-$ rustup default nightly-2020-12-29
+$ rustup default 1.57.0
 ```
 
 And then build the backend with:
