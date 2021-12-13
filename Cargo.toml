@@ -13,7 +13,7 @@
 #
 [package]
 name = "zenoh_backend_influxdb"
-version = "0.6.0-dev"
+version = "0.6.0-dev.0"
 authors = [
     "kydos <angelo@icorsaro.net>",
     "Julien Enoch <julien@enoch.fr>",
@@ -56,4 +56,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2017, 2020 ADLINK Technology Inc."
 section = "net"
 license-file = ["LICENSE", "0"]
-depends = "zenoh-plugin-storages (=0.6.0~dev)"
+depends = "zenoh-plugin-storages (=0.6.0~dev.0)"
