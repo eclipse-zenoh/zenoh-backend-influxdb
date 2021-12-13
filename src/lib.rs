@@ -257,7 +257,7 @@ impl Backend for InfluxDbBackend {
             client,
             path_prefix,
             on_closure,
-            timer: Timer::new(),
+            timer: Timer::default(),
         }))
     }
 
