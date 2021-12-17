@@ -161,8 +161,8 @@ pub struct InfluxDbBackend {
 
 #[async_trait]
 impl Backend for InfluxDbBackend {
-    async fn get_admin_status(&self) -> Value {
-        self.admin_status.to_json_value().into()
+    fn get_admin_status(&self) -> serde_json::Value {
+        self.admin_status.to_json_value()
     }
 
     async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
@@ -361,9 +361,9 @@ impl InfluxDbStorage {
 
 #[async_trait]
 impl Storage for InfluxDbStorage {
-    async fn get_admin_status(&self) -> Value {
+    fn get_admin_status(&self) -> serde_json::Value {
         // TODO: possibly add more properties in returned Value for more information about this storage
-        self.admin_status.to_json_value().into()
+        self.admin_status.to_json_value()
     }
 
     // When receiving a Sample (i.e. on PUT or DELETE operations)
