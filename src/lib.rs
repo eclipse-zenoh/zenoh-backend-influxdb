@@ -35,8 +35,8 @@ use zenoh_backend_traits::config::{
     BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
 };
 use zenoh_backend_traits::*;
-use zenoh_util::collections::{Timed, TimedEvent, TimedHandle, Timer};
-use zenoh_util::{bail, zerror};
+use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
+use zenoh_core::{bail, zerror};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -277,7 +277,7 @@ enum OnClosure {
 }
 
 impl TryFrom<&Properties> for OnClosure {
-    type Error = zenoh_util::core::Error;
+    type Error = zenoh_core::Error;
     fn try_from(p: &Properties) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
