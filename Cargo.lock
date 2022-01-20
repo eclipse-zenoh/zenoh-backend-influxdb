@@ -596,9 +596,9 @@ checksum = "dcb25d077389e53838a8158c8e99174c5a9d902dee4904320db714f3c653ffba"
 
 [[package]]
 name = "crossbeam-queue"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b10ddc024425c88c2ad148c1b0fd53f4c6d38db9697c9f1588381212fa657c9"
+checksum = "b979d76c9fcb84dffc80a73f7290da0f83e4c95773494674cb44b76d13a7a110"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -3010,7 +3010,7 @@ dependencies = [
 [[package]]
 name = "zenoh"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "async-global-executor",
  "async-rustls",
@@ -3062,7 +3062,7 @@ dependencies = [
 [[package]]
 name = "zenoh-cfg-properties"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "zenoh-core",
  "zenoh-macros",
@@ -3071,7 +3071,7 @@ dependencies = [
 [[package]]
 name = "zenoh-collections"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "async-std",
  "async-trait",
@@ -3084,7 +3084,7 @@ dependencies = [
 [[package]]
 name = "zenoh-core"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -3093,7 +3093,7 @@ dependencies = [
 [[package]]
 name = "zenoh-crypto"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "aes 0.7.5",
  "hmac 0.11.0",
@@ -3106,7 +3106,7 @@ dependencies = [
 [[package]]
 name = "zenoh-macros"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3118,7 +3118,7 @@ dependencies = [
 [[package]]
 name = "zenoh-plugin-trait"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "libloading",
  "log",
@@ -3131,7 +3131,7 @@ dependencies = [
 [[package]]
 name = "zenoh-sync"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "async-std",
  "event-listener",
@@ -3143,7 +3143,7 @@ dependencies = [
 [[package]]
 name = "zenoh-util"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "async-std",
  "clap",
@@ -3191,7 +3191,7 @@ dependencies = [
 [[package]]
 name = "zenoh_backend_traits"
 version = "0.6.0-dev.0"
-source = "git+https://github.com/p-avital/zenoh?branch=crate-splitting#5250c07b6ac0f587436d2bf17fe6d9117291537b"
+source = "git+https://github.com/eclipse-zenoh/zenoh#26a721f5bd09551ae5af845fba444389be663055"
 dependencies = [
  "async-std",
  "async-trait",
