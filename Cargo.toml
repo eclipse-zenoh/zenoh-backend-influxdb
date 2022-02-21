@@ -29,6 +29,7 @@ crate-type = ["cdylib"]
 [dependencies]
 zenoh_backend_traits = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh-buffers = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh-core = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh-collections = { git = "https://github.com/eclipse-zenoh/zenoh" }
 async-std = "=1.10.0"

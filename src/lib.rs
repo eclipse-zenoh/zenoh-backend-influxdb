@@ -35,6 +35,7 @@ use zenoh_backend_traits::config::{
     BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
 };
 use zenoh_backend_traits::*;
+use zenoh_buffers::SplitBuffer;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_core::{bail, zerror};
 
@@ -395,10 +396,11 @@ impl Storage for InfluxDbStorage {
                 }
 
                 // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-                let (base64, strvalue) = match String::from_utf8(sample.value.payload.to_vec()) {
-                    Ok(s) => (false, s),
-                    Err(err) => (true, base64::encode(err.into_bytes())),
-                };
+                let (base64, strvalue) =
+                    match String::from_utf8(sample.value.payload.contiguous().into_owned()) {
+                        Ok(s) => (false, s),
+                        Err(err) => (true, base64::encode(err.into_bytes())),
+                    };
 
                 // Note: tags are stored as strings in InfluxDB, while fileds are typed.
                 // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
