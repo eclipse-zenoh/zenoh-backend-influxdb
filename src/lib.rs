@@ -21,7 +21,7 @@ use log::{debug, error, warn};
 use regex::Regex;
 use serde::Deserialize;
 use std::borrow::Cow;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -409,8 +409,8 @@ impl Storage for InfluxDbStorage {
                     InfluxWQuery::new(InfluxTimestamp::Nanoseconds(influx_time), measurement)
                         .add_tag("kind", "PUT")
                         .add_field("timestamp", sample_ts.to_string())
-                        .add_field("encoding_prefix", sample.value.encoding.prefix)
-                        .add_field("encoding_suffix", &*sample.value.encoding.suffix)
+                        .add_field("encoding_prefix", u8::from(*sample.value.encoding.prefix()))
+                        .add_field("encoding_suffix", sample.value.encoding.suffix())
                         .add_field("base64", base64)
                         .add_field("value", strvalue);
                 debug!("Put {} with Influx query: {:?}", sample.key_expr, query);
@@ -518,9 +518,17 @@ impl Storage for InfluxDbStorage {
                                 res_name.push_str(&serie.name);
                                 debug!("Replying {} values for {}", serie.values.len(), res_name);
                                 for zpoint in serie.values {
-                                    let encoding = Encoding {
-                                        prefix: zpoint.encoding_prefix,
-                                        suffix: zpoint.encoding_suffix.into(),
+                                    let encoding_prefix =
+                                        zpoint.encoding_prefix.try_into().map_err(|_| {
+                                            zerror!("Unknown encoding {}", zpoint.encoding_prefix)
+                                        })?;
+                                    let encoding = if zpoint.encoding_suffix.is_empty() {
+                                        Encoding::Exact(encoding_prefix)
+                                    } else {
+                                        Encoding::WithSuffix(
+                                            encoding_prefix,
+                                            zpoint.encoding_suffix.into(),
+                                        )
                                     };
                                     let payload = if zpoint.base64 {
                                         match base64::decode(zpoint.value) {
