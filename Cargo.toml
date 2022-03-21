@@ -27,11 +27,11 @@ name = "zbackend_influxdb"
 crate-type = ["cdylib"]
 
 [dependencies]
-zenoh_backend_traits = { git = "https://github.com/eclipse-zenoh/zenoh" }
-zenoh = { git = "https://github.com/eclipse-zenoh/zenoh" }
-zenoh-buffers = { git = "https://github.com/eclipse-zenoh/zenoh" }
-zenoh-core = { git = "https://github.com/eclipse-zenoh/zenoh" }
-zenoh-collections = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh_backend_traits = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storage-manager-cfg-refactor" }
+zenoh = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storage-manager-cfg-refactor" }
+zenoh-buffers = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storage-manager-cfg-refactor" }
+zenoh-core = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storage-manager-cfg-refactor" }
+zenoh-collections = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storage-manager-cfg-refactor" }
 async-std = "=1.10.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
