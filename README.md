@@ -42,26 +42,35 @@ You can setup storages either at zenoh router startup via a configuration file, 
     ```json5
     {
       plugins: {
-        // configuration of "storages" plugin:
-        storages: {
-          backends: {
+        // configuration of "storage_manager" plugin:
+        storage_manger: {
+          volumes: {
             // configuration of a "influxdb" backend (the "zbackend_influxdb" library will be loaded at startup)
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
-              storages: {
-                // configuration of a "demo" storage using the "influxdb" backend
-                demo: {
-                  // the key expression this storage will subscribes to
-                  key_expr: "/demo/example/**",
-                  // this prefix will be stripped from the received key when converting to database key.
-                  // i.e.: "/demo/example/a/b" will be stored as "a/b"
-                  strip_prefix: "/demo/example",
+            },
+            storages: {
+              // configuration of a "demo" storage using the "influxdb" backend
+              demo: {
+                // the key expression this storage will subscribes to
+                key_expr: "/demo/example/**",
+                // this prefix will be stripped from the received key when converting to database key.
+                // i.e.: "/demo/example/a/b" will be stored as "a/b"
+                strip_prefix: "/demo/example",
+                volume: {
+                  id: "influxdb",
                   // the database name within InfluxDB
                   db: "zenoh_example",
                   // if the database doesn't exist, create it
                   create_db: true
-    } } } } } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     ```
   - Run the zenoh router with:  
     `zenohd -c zenoh.json5`
@@ -71,9 +80,9 @@ You can setup storages either at zenoh router startup via a configuration file, 
   - Run the zenoh router without any specific configuration, but loading the storages plugin:  
     `zenohd -P storages`
   - Add the "influxdbn" backend (the "zbackend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
-    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storages/backends/influxdb`
+    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb`
  - Add the "demo" storage using the "influxdb" backend:
-   `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"/demo/example/**",db:"zenoh_example",create_db:true}' http://localhost:8000/@/router/local/config/plugins/storages/backends/influxdb/storages/demo`
+   `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"/demo/example/**",volume:{id:"influxdb",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
 
 ### **Tests using the REST API**
 
