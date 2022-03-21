@@ -32,7 +32,7 @@ use zenoh::time::new_reception_timestamp;
 use zenoh::time::Timestamp;
 use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
-    BackendConfig, PrivacyGetResult, PrivacyTransparentGet, StorageConfig,
+    PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
 use zenoh_backend_traits::*;
 use zenoh_buffers::SplitBuffer;
@@ -62,7 +62,7 @@ lazy_static::lazy_static!(
 #[allow(dead_code)]
 const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
 
-fn get_credential<'a>(config: &'a BackendConfig, credit: &str) -> ZResult<Option<&'a String>> {
+fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<&'a String>> {
     match config.rest.get_private(PROP_BACKEND_USERNAME) {
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
@@ -97,7 +97,7 @@ fn get_credential<'a>(config: &'a BackendConfig, credit: &str) -> ZResult<Option
 }
 
 #[no_mangle]
-pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
+pub fn create_backend(mut config: VolumeConfig) -> ZResult<Box<dyn Backend>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
@@ -155,7 +155,7 @@ pub fn create_backend(mut config: BackendConfig) -> ZResult<Box<dyn Backend>> {
 }
 
 pub struct InfluxDbBackend {
-    admin_status: BackendConfig,
+    admin_status: VolumeConfig,
     admin_client: Client,
     credentials: Option<(String, String)>,
 }
@@ -179,7 +179,11 @@ impl Backend for InfluxDbBackend {
                 &path_expr
             )
         };
-        let on_closure = match config.rest.get(PROP_STORAGE_ON_CLOSURE) {
+        let volume_cfg = match config.volume_cfg.as_object() {
+            Some(v) => v,
+            None => bail!("influxdb backed storages need some volume-specific configuration"),
+        };
+        let on_closure = match volume_cfg.get(PROP_STORAGE_ON_CLOSURE) {
             Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
             Some(serde_json::Value::String(x)) if x == "drop_db" => OnClosure::DropDb,
             Some(serde_json::Value::String(x)) if x == "do_nothing" => OnClosure::DoNothing,
@@ -192,10 +196,10 @@ impl Backend for InfluxDbBackend {
                 )
             }
         };
-        let (db, createdb) = match config.rest.get(PROP_STORAGE_DB) {
+        let (db, createdb) = match volume_cfg.get(PROP_STORAGE_DB) {
             Some(serde_json::Value::String(s)) => (
                 s.clone(),
-                match config.rest.get(PROP_STORAGE_CREATE_DB) {
+                match volume_cfg.get(PROP_STORAGE_CREATE_DB) {
                     None | Some(serde_json::Value::Bool(false)) => false,
                     Some(serde_json::Value::Bool(true)) => true,
                     Some(_) => todo!(),
@@ -210,8 +214,16 @@ impl Backend for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
         // Note: remove username/password from properties to not re-expose them in admin_status
         let storage_username = match (
-            config.rest.remove(PROP_STORAGE_USERNAME),
-            config.rest.remove(PROP_STORAGE_PASSWORD),
+            config
+                .volume_cfg
+                .as_object_mut()
+                .unwrap()
+                .remove(PROP_STORAGE_USERNAME),
+            config
+                .volume_cfg
+                .as_object_mut()
+                .unwrap()
+                .remove(PROP_STORAGE_PASSWORD),
         ) {
             (
                 Some(serde_json::Value::String(username)),
@@ -242,7 +254,9 @@ impl Backend for InfluxDbBackend {
 
         // re-insert the actual name of database (in case it has been generated)
         config
-            .rest
+            .volume_cfg
+            .as_object_mut()
+            .unwrap()
             .entry(PROP_STORAGE_DB)
             .or_insert(db.clone().into());
 
