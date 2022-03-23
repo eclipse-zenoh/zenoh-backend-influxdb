@@ -60,7 +60,7 @@ lazy_static::lazy_static!(
 );
 
 #[allow(dead_code)]
-const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
+const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
 fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<&'a String>> {
     match config.rest.get_private(PROP_BACKEND_USERNAME) {
@@ -97,7 +97,7 @@ fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<
 }
 
 #[no_mangle]
-pub fn create_backend(mut config: VolumeConfig) -> ZResult<Box<dyn Backend>> {
+pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
@@ -161,7 +161,7 @@ pub struct InfluxDbBackend {
 }
 
 #[async_trait]
-impl Backend for InfluxDbBackend {
+impl Volume for InfluxDbBackend {
     fn get_admin_status(&self) -> serde_json::Value {
         self.admin_status.to_json_value()
     }
