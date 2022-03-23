@@ -27,11 +27,11 @@ name = "zbackend_influxdb"
 crate-type = ["cdylib"]
 
 [dependencies]
-zenoh_backend_traits = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storages-cleanup" }
-zenoh = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storages-cleanup" }
-zenoh-buffers = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storages-cleanup" }
-zenoh-core = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storages-cleanup" }
-zenoh-collections = { git = "https://github.com/ZettaScaleLabs/zenoh", branch = "storages-cleanup" }
+zenoh_backend_traits = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh-buffers = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh-core = { git = "https://github.com/eclipse-zenoh/zenoh" }
+zenoh-collections = { git = "https://github.com/eclipse-zenoh/zenoh" }
 async-std = "=1.10.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
