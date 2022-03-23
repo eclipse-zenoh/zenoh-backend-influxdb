@@ -49,6 +49,10 @@ You can setup storages either at zenoh router startup via a configuration file, 
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
+              private: {
+                username: "user",
+                password: "password"
+              }
             },
             storages: {
               // configuration of a "demo" storage using the "influxdb" backend
@@ -57,6 +61,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 key_expr: "/demo/example/**",
                 // this prefix will be stripped from the received key when converting to database key.
                 // i.e.: "/demo/example/a/b" will be stored as "a/b"
+                // this option is optional
                 strip_prefix: "/demo/example",
                 volume: {
                   id: "influxdb",
@@ -112,45 +117,41 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 -->
 
 -------------------------------
-## **Properties for Backend creation**
+## Volume configuration
+InfluxDB-backed volumes need some configuration to work:
 
-- **`"lib"`** (optional) : the path to the backend library file. If not speficied, the Backend identifier in admin space must be `influxdb` (i.e. zenoh will automatically search for a library named `zbackend_influxdb`).
-
-- **`"url"`** (**required**) : an URL to the InfluxDB service. Example: `http://localhost:8086`
+- **`"url"`** (**required**) : a URL to the InfluxDB service. Example: `http://localhost:8086`
 
 - **`"username"`** (optional) : an [InfluxDB admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#admin-users) user name. It will be used for creation of databases, granting read/write privileges of databases mapped to storages and dropping of databases and measurements.
 
 - **`"password"`** (optional) : the admin user's password.
 
+Both `username` and `password` should be hidden behind a `private` gate, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
+
 -------------------------------
-## **Properties for Storage creation**
+## Volume-specific storage configuration
+Storages relying on a `influxdb` backed volume may have additional configuration through the `volume` section:
+- **`"db"`** (optional, string) : the InfluxDB database name the storage will map into. If not specified, a random name will be generated, and the corresponding database will be created (even if `"create_db"` is not set).
 
-- **`"key_expr"`** (**required**) : the Storage's [Key Expression](../abstractions#key-expression)
-
-- **`"strip_prefix"`** (optional) : a prefix of the `"key_expr"` that will be stripped from each key to store.  
-  _Example: with `"key_expr"="/demo/example/**"` and `"strip_prefix"="/demo/example/"` the key `"/demo/example/foo/bar"` will be stored as key: `"foo/bar"`. But replying to a get on `"/demo/**"`, the key `"foo/bar"` will be transformed back to the original key (`"/demo/example/foo/bar"`)._
-
-- **`"db"`** (optional) : the InfluxDB database name the storage will map into. If not specified, a random name will be generated, and the corresponding database will be created (even if `"create_db"` is not set).
-
-- **`"create_db"`** (optional) : create the InfluxDB database if not already existing.
+- **`"create_db"`** (optional, boolean) : create the InfluxDB database if not already existing.
   By default the database is not created, unless `"db"` property is not specified.
   *(the value doesn't matter, only the property existence is checked)*
 
-- **`"on_closure"`** (optional) : the strategy to use when the Storage is removed. There are 3 options:
+- **`"on_closure"`** (optional, string) : the strategy to use when the Storage is removed. There are 3 options:
   - *unset*: the database remains untouched (this is the default behaviour)
   - `"drop_db"`: the database is dropped (i.e. removed)
   - `"drop_series"`: all the series (measurements) are dropped and the database remains empty.
 
-- **`"username"`** (optional) : an InfluxDB user name (usually [non-admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#non-admin-users)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
+- **`"username"`** (optional, string) : an InfluxDB user name (usually [non-admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#non-admin-users)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
 
-- **`"password"`** (optional) : the user's password.
+- **`"password"`** (optional, string) : the user's password.
 
 -------------------------------
 ## **Behaviour of the backend**
 
 ### Mapping to InfluxDB concepts
 Each **storage** will map to an InfluxDB **database**.  
-Each **key** to store will map to a an InfluxDB
+Each **key** to store will map to an InfluxDB
 [**measurement**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#measurement)
 named with the key stripped from the `"strip_prefix"` property (see below).  
 Each **key/value** put into the storage will map to an InfluxDB

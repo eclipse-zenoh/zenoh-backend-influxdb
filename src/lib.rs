@@ -60,7 +60,7 @@ lazy_static::lazy_static!(
 );
 
 #[allow(dead_code)]
-const CREATE_BACKEND_TYPECHECK: CreateBackend = create_backend;
+const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
 fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<&'a String>> {
     match config.rest.get_private(PROP_BACKEND_USERNAME) {
@@ -97,7 +97,7 @@ fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<
 }
 
 #[no_mangle]
-pub fn create_backend(mut config: VolumeConfig) -> ZResult<Box<dyn Backend>> {
+pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
@@ -161,7 +161,7 @@ pub struct InfluxDbBackend {
 }
 
 #[async_trait]
-impl Backend for InfluxDbBackend {
+impl Volume for InfluxDbBackend {
     fn get_admin_status(&self) -> serde_json::Value {
         self.admin_status.to_json_value()
     }
@@ -179,7 +179,7 @@ impl Backend for InfluxDbBackend {
                 &path_expr
             )
         };
-        let volume_cfg = match config.volume_cfg.as_object() {
+        let volume_cfg = match config.volume_cfg.as_object_mut() {
             Some(v) => v,
             None => bail!("influxdb backed storages need some volume-specific configuration"),
         };
@@ -214,16 +214,16 @@ impl Backend for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
         // Note: remove username/password from properties to not re-expose them in admin_status
         let storage_username = match (
-            config
-                .volume_cfg
-                .as_object_mut()
-                .unwrap()
-                .remove(PROP_STORAGE_USERNAME),
-            config
-                .volume_cfg
-                .as_object_mut()
-                .unwrap()
-                .remove(PROP_STORAGE_PASSWORD),
+            volume_cfg.remove(PROP_STORAGE_USERNAME).or_else(|| {
+                volume_cfg
+                    .get_mut("private")
+                    .and_then(|o| o.as_object_mut().unwrap().remove(PROP_STORAGE_USERNAME))
+            }),
+            volume_cfg.remove(PROP_STORAGE_PASSWORD).or_else(|| {
+                volume_cfg
+                    .get_mut("private")
+                    .and_then(|o| o.as_object_mut().unwrap().remove(PROP_STORAGE_PASSWORD))
+            }),
         ) {
             (
                 Some(serde_json::Value::String(username)),
