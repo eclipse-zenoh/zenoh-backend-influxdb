@@ -62,8 +62,11 @@ lazy_static::lazy_static!(
 #[allow(dead_code)]
 const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
-fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<&'a String>> {
-    match config.rest.get_private(PROP_BACKEND_USERNAME) {
+fn get_private_conf<'a>(
+    config: &'a serde_json::Map<String, serde_json::Value>,
+    credit: &str,
+) -> ZResult<Option<&'a String>> {
+    match config.get_private(credit) {
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
         PrivacyGetResult::Public(serde_json::Value::String(v)) => {
@@ -83,7 +86,7 @@ fn get_credential<'a>(config: &'a VolumeConfig, credit: &str) -> ZResult<Option<
             private: serde_json::Value::String(private),
         } => {
             log::warn!(
-                r#"Value "{}" is given for `{}` publicly, but a private value also exists. The private value will be used, but the public value, which is {}the same as the private one, will still be visible in configurations."#,
+                r#"Value "{}" is given for `{}` publicly, but a private value also exists. The private value will be used, but the public value, which is {} the same as the private one, will still be visible in configurations."#,
                 public,
                 credit,
                 if public == private { "" } else { "not " }
@@ -122,8 +125,8 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
 
     // Note: remove username/password from properties to not re-expose them in admin_status
     let credentials = match (
-        get_credential(&config, PROP_BACKEND_USERNAME)?,
-        get_credential(&config, PROP_BACKEND_PASSWORD)?,
+        get_private_conf(&config.rest, PROP_BACKEND_USERNAME)?,
+        get_private_conf(&config.rest, PROP_BACKEND_PASSWORD)?,
     ) {
         (Some(username), Some(password)) => {
             admin_client = admin_client.with_auth(username, password);
@@ -139,19 +142,22 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
         }
     };
 
-    // Check connectivity to InfluxDB, no need for a database for this
-    let admin_client_copy = admin_client.clone();
-    match async_std::task::block_on(async move { admin_client_copy.ping().await }) {
-        Ok(_) => {
-            config.rest.insert("type".into(), "InfluxDB".into());
-            Ok(Box::new(InfluxDbBackend {
-                admin_status: config,
-                admin_client,
-                credentials,
-            }))
+    // Check connectivity to InfluxDB, trying to list databases
+    match async_std::task::block_on(async { show_databases(&admin_client).await }) {
+        Ok(dbs) => {
+            // trick: if "_internal" db is not shown, it means the credentials are not for an admin
+            if !dbs.iter().any(|e| e == "_internal") {
+                warn!("The InfluxDB credentials are not for an admin user; the volume won't be able to create or drop any database")
+            }
         }
-        Err(err) => bail!("Failed to create InfluxDb Backend : {}", err),
+        Err(e) => bail!("Failed to create InfluxDb Volume : {}", e),
     }
+
+    Ok(Box::new(InfluxDbBackend {
+        admin_status: config,
+        admin_client,
+        credentials,
+    }))
 }
 
 pub struct InfluxDbBackend {
@@ -179,7 +185,7 @@ impl Volume for InfluxDbBackend {
                 &path_expr
             )
         };
-        let volume_cfg = match config.volume_cfg.as_object_mut() {
+        let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
             None => bail!("influxdb backed storages need some volume-specific configuration"),
         };
@@ -212,32 +218,22 @@ impl Volume for InfluxDbBackend {
         // The Influx client on database used to write/query on this storage
         // (using the same URL than backend's admin_client, but with storage credentials)
         let mut client = Client::new(self.admin_client.database_url(), &db);
-        // Note: remove username/password from properties to not re-expose them in admin_status
+
+        // Use credentials if specified in storage's volume config
         let storage_username = match (
-            volume_cfg.remove(PROP_STORAGE_USERNAME).or_else(|| {
-                volume_cfg
-                    .get_mut("private")
-                    .and_then(|o| o.as_object_mut().unwrap().remove(PROP_STORAGE_USERNAME))
-            }),
-            volume_cfg.remove(PROP_STORAGE_PASSWORD).or_else(|| {
-                volume_cfg
-                    .get_mut("private")
-                    .and_then(|o| o.as_object_mut().unwrap().remove(PROP_STORAGE_PASSWORD))
-            }),
+            get_private_conf(volume_cfg, PROP_STORAGE_USERNAME)?,
+            get_private_conf(volume_cfg, PROP_STORAGE_PASSWORD)?,
         ) {
-            (
-                Some(serde_json::Value::String(username)),
-                Some(serde_json::Value::String(password)),
-            ) => {
-                client = client.with_auth(&username, password);
-                Some(username)
+            (Some(username), Some(password)) => {
+                client = client.with_auth(username, password);
+                Some(username.clone())
             }
             (None, None) => None,
             _ => {
                 bail!(
-                    "Optional properties `{}` and `{}` must coexist and be strings",
-                    PROP_BACKEND_USERNAME,
-                    PROP_BACKEND_PASSWORD
+                    "Optional properties `{}` and `{}` must coexist",
+                    PROP_STORAGE_USERNAME,
+                    PROP_STORAGE_PASSWORD
                 )
             }
         };
@@ -703,7 +699,7 @@ fn generate_db_name() -> String {
     format!("zenoh_db_{}", Uuid::new_v4().to_simple())
 }
 
-async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
+async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
     #[derive(Deserialize)]
     struct Database {
         name: String,
@@ -713,15 +709,13 @@ async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
     match client.json_query(query).await {
         Ok(mut result) => match result.deserialize_next::<Database>() {
             Ok(dbs) => {
+                let mut result: Vec<String> = Vec::new();
                 for serie in dbs.series {
                     for db in serie.values {
-                        if db_name == db.name {
-                            return Ok(true);
-                        }
+                        result.push(db.name);
                     }
                 }
-                // not found
-                Ok(false)
+                Ok(result)
             }
             Err(e) => bail!(
                 "Failed to parse list of existing InfluxDb databases : {}",
@@ -730,6 +724,11 @@ async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
         },
         Err(e) => bail!("Failed to list existing InfluxDb databases : {}", e),
     }
+}
+
+async fn is_db_existing(client: &Client, db_name: &str) -> ZResult<bool> {
+    let dbs = show_databases(client).await?;
+    Ok(dbs.iter().any(|e| e == db_name))
 }
 
 async fn create_db(
