@@ -38,37 +38,45 @@ You can setup storages either at zenoh router startup via a configuration file, 
 
 ### **Setup via a JSON5 configuration file**
 
-  - Create a `zenoh.json5` configuration file containing:
+  - Create a `zenoh.json5` configuration file containing for example:
     ```json5
     {
       plugins: {
         // configuration of "storage_manager" plugin:
-        storage_manger: {
+        storage_manager: {
           volumes: {
             // configuration of a "influxdb" backend (the "zbackend_influxdb" library will be loaded at startup)
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
               private: {
-                username: "user",
+                // InfluxDB credentials, preferably admin for databases creation and drop
+                username: "admin",
                 password: "password"
               }
-            },
-            storages: {
-              // configuration of a "demo" storage using the "influxdb" backend
-              demo: {
-                // the key expression this storage will subscribes to
-                key_expr: "/demo/example/**",
-                // this prefix will be stripped from the received key when converting to database key.
-                // i.e.: "/demo/example/a/b" will be stored as "a/b"
-                // this option is optional
-                strip_prefix: "/demo/example",
-                volume: {
-                  id: "influxdb",
-                  // the database name within InfluxDB
-                  db: "zenoh_example",
-                  // if the database doesn't exist, create it
-                  create_db: true
+            }
+          },
+          storages: {
+            // configuration of a "demo" storage using the "influxdb" backend
+            demo: {
+              // the key expression this storage will subscribes to
+              key_expr: "/demo/example/**",
+              // this prefix will be stripped from the received key when converting to database key.
+              // i.e.: "/demo/example/a/b" will be stored as "a/b"
+              // this option is optional
+              strip_prefix: "/demo/example",
+              volume: {
+                id: "influxdb",
+                // the database name within InfluxDB
+                db: "zenoh_example",
+                // if the database doesn't exist, create it
+                create_db: true,
+                // strategy on storage closure
+                on_closure: "drop_db",
+                private: {
+                  // InfluxDB credentials, with read/write privileges for the database
+                  username: "user",
+                  password: "password"
                 }
               }
             }
@@ -138,7 +146,7 @@ Storages relying on a `influxdb` backed volume may have additional configuration
   *(the value doesn't matter, only the property existence is checked)*
 
 - **`"on_closure"`** (optional, string) : the strategy to use when the Storage is removed. There are 3 options:
-  - *unset*: the database remains untouched (this is the default behaviour)
+  - *unset* or `"do_nothing"`: the database remains untouched (this is the default behaviour)
   - `"drop_db"`: the database is dropped (i.e. removed)
   - `"drop_series"`: all the series (measurements) are dropped and the database remains empty.
 
