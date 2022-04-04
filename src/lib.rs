@@ -602,7 +602,8 @@ impl Drop for InfluxDbStorage {
                 let _ = task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
-                    let query = <dyn InfluxQuery>::raw_read_query(format!("DROP DATABASE {}", db));
+                    let query =
+                        <dyn InfluxQuery>::raw_read_query(format!(r#"DROP DATABASE "{}""#, db));
                     if let Err(e) = self.admin_client.query(&query).await {
                         error!("Failed to drop InfluxDb database '{}' : {}", db, e)
                     }
@@ -736,7 +737,7 @@ async fn create_db(
     db_name: &str,
     storage_username: Option<String>,
 ) -> ZResult<()> {
-    let query = <dyn InfluxQuery>::raw_read_query(format!("CREATE DATABASE {}", db_name));
+    let query = <dyn InfluxQuery>::raw_read_query(format!(r#"CREATE DATABASE "{}""#, db_name));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
         bail!(
@@ -748,8 +749,10 @@ async fn create_db(
 
     // is a username is specified for storage access, grant him access to the database
     if let Some(username) = storage_username {
-        let query =
-            <dyn InfluxQuery>::raw_read_query(format!("GRANT ALL ON {} TO {}", db_name, username));
+        let query = <dyn InfluxQuery>::raw_read_query(format!(
+            r#"GRANT ALL ON "{}" TO "{}""#,
+            db_name, username
+        ));
         debug!(
             "Grant access to {} on Influx database: {}",
             username, db_name
