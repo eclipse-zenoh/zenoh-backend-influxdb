@@ -32,7 +32,7 @@ zenoh = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh-buffers = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh-core = { git = "https://github.com/eclipse-zenoh/zenoh" }
 zenoh-collections = { git = "https://github.com/eclipse-zenoh/zenoh" }
-async-std = "=1.10.0"
+async-std = "=1.11.0"
 async-trait = "0.1.42"
 lazy_static = "1.4.0"
 regex = "1"
