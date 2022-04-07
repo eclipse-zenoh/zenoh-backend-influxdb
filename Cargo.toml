@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2017, 2020 ADLINK Technology Inc.
+# Copyright (c) 2022 ZettaScale Technology
 #
 # This program and the accompanying materials are made available under the
 # terms of the Eclipse Public License 2.0 which is available at
@@ -9,7 +9,7 @@
 # SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
 #
 # Contributors:
-#   ADLINK zenoh team, <zenoh@adlink-labs.tech>
+#   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 #
 [package]
 name = "zenoh_backend_influxdb"
@@ -17,8 +17,8 @@ version = "0.6.0-dev.0"
 authors = [
     "kydos <angelo@icorsaro.net>",
     "Julien Enoch <julien@enoch.fr>",
-    "Olivier Hécart <olivier.hecart@adlinktech.com>",
-    "Luca Cominardi <luca.cominardi@adlinktech.com>",
+    "Olivier Hécart <olivier.hecart@zettascale.tech>",
+    "Luca Cominardi <luca.cominardi@zettascale.tech>",
 ]
 edition = "2018"
 
@@ -55,7 +55,7 @@ rustc_version = "0.4.0"
 [package.metadata.deb]
 name = "zenoh-backend-influxdb"
 maintainer = "zenoh-dev@eclipse.org"
-copyright = "2017, 2020 ADLINK Technology Inc."
+copyright = "2022 ZettaScale Technology"
 section = "net"
 license-file = ["LICENSE", "0"]
 depends = "zenoh-plugin-storages (=0.6.0~dev.0)"
