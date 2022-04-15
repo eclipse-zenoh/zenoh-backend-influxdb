@@ -34,6 +34,7 @@ use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
+use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
 use zenoh_buffers::SplitBuffer;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
@@ -378,7 +379,7 @@ impl Storage for InfluxDbStorage {
     }
 
     // When receiving a Sample (i.e. on PUT or DELETE operations)
-    async fn on_sample(&mut self, sample: Sample) -> ZResult<()> {
+    async fn on_sample(&mut self, sample: Sample) -> ZResult<StorageInsertionResult> {
         // measurement is the path, stripped of the path_prefix if any
         let mut measurement = sample.key_expr.try_as_str()?;
         if let Some(prefix) = &self.path_prefix {
@@ -401,7 +402,7 @@ impl Storage for InfluxDbStorage {
                     // ignore sample if oldest than the deletion
                     if sample_ts < del_time {
                         debug!("Received a Sample for {} with timestamp older than its deletion; ignore it", sample.key_expr);
-                        return Ok(());
+                        return Ok(StorageInsertionResult::Outdated);
                     }
                 }
 
@@ -430,6 +431,8 @@ impl Storage for InfluxDbStorage {
                         sample.key_expr,
                         e
                     )
+                } else {
+                    Ok(StorageInsertionResult::Inserted)
                 }
             }
             SampleKind::Delete => {
@@ -465,12 +468,13 @@ impl Storage for InfluxDbStorage {
                 }
                 // schedule the drop of measurement later in the future, if it's empty
                 let _ = self.schedule_measurement_drop(measurement).await;
+                Ok(StorageInsertionResult::Deleted)
             }
             SampleKind::Patch => {
-                println!("Received PATCH for {}: not yet supported", sample.key_expr);
+                warn!("Received PATCH for {}: not yet supported", sample.key_expr);
+                Ok(StorageInsertionResult::Outdated)
             }
         }
-        Ok(())
     }
 
     // When receiving a Query (i.e. on GET operations)
