@@ -408,7 +408,7 @@ impl Storage for InfluxDbStorage {
 
                 // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
                 let (base64, strvalue) =
-                    match String::from_utf8(sample.value.payload.contiguous().into_owned()) {
+                    match String::from_utf8(sample.payload.contiguous().into_owned()) {
                         Ok(s) => (false, s),
                         Err(err) => (true, base64::encode(err.into_bytes())),
                     };
@@ -569,12 +569,18 @@ impl Storage for InfluxDbStorage {
                                         }
                                     };
                                     let value = Value { payload, encoding };
-                                    query
+                                    if let Err(e) = query
                                         .reply(
                                             Sample::new(res_name.clone(), value)
                                                 .with_timestamp(timestamp),
                                         )
-                                        .await;
+                                        .await
+                                    {
+                                        warn!(
+                                            "Error replying to query on {} with {}: {}",
+                                            selector_str, res_name, e
+                                        );
+                                    }
                                 }
                             }
                         }
