@@ -602,6 +602,71 @@ impl Storage for InfluxDbStorage {
             ),
         }
     }
+
+    async fn get_all_entries(&self) -> ZResult<Vec<(String, Timestamp)>> {
+        let mut result = Vec::new();
+
+        let regex = path_exprs_to_influx_regex(&["**"]);
+
+        // the Influx query
+        let influx_query_str = format!("SELECT * FROM {}", regex);
+        let influx_query = <dyn InfluxQuery>::raw_read_query(&influx_query_str);
+
+        // the expected JSon type resulting from the query
+        #[derive(Deserialize, Debug)]
+        struct ZenohPoint {
+            #[allow(dead_code)]
+            // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
+            kind: String,
+            timestamp: String,
+        }
+        debug!("Get all entries with Influx query: {}", influx_query_str);
+        match self.client.json_query(influx_query).await {
+            Ok(mut query_result) => {
+                while !query_result.results.is_empty() {
+                    match query_result.deserialize_next::<ZenohPoint>() {
+                        Ok(retn) => {
+                            for serie in retn.series {
+                                // reconstruct the path from the measurement name (same as serie.name)
+                                let mut res_name = String::with_capacity(serie.name.len());
+                                if let Some(p) = &self.path_prefix {
+                                    res_name.push_str(p);
+                                }
+                                res_name.push_str(&serie.name);
+                                debug!("Replying {} values for {}", serie.values.len(), res_name);
+                                for zpoint in serie.values {
+                                    let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
+                                        Ok(t) => t,
+                                        Err(e) => {
+                                            warn!(
+                                                r#"Failed to decode zenoh Timestamp from Influx point {} with timestamp="{}": {:?}"#,
+                                                serie.name, zpoint.timestamp, e
+                                            );
+                                            continue;
+                                        }
+                                    };
+                                    result.push((res_name.to_string(), timestamp));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            bail!(
+                                "Failed to parse result of InfluxDB query '{}': {}",
+                                influx_query_str,
+                                e
+                            )
+                        }
+                    }
+                }
+                Ok(result)
+            }
+            Err(e) => bail!(
+                "Failed to query InfluxDb with '{}' : {}",
+                influx_query_str,
+                e
+            ),
+        }
+    }
 }
 
 impl Drop for InfluxDbStorage {
