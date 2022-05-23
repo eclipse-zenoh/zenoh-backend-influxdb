@@ -27,9 +27,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zenoh::buf::ZBuf;
+use zenoh::prelude::r#async::AsyncResolve;
 use zenoh::prelude::*;
-use zenoh::time::new_reception_timestamp;
-use zenoh::time::Timestamp;
+use zenoh::time::{new_reception_timestamp, Timestamp};
 use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
@@ -574,6 +574,7 @@ impl Storage for InfluxDbStorage {
                                             Sample::new(res_name.clone(), value)
                                                 .with_timestamp(timestamp),
                                         )
+                                        .res()
                                         .await
                                     {
                                         warn!(
