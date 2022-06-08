@@ -38,7 +38,7 @@ use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
 use zenoh_buffers::SplitBuffer;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
-use zenoh_core::{bail, zerror};
+use zenoh_core::{bail, zerror, AsyncResolve};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -381,7 +381,7 @@ impl Storage for InfluxDbStorage {
     // When receiving a Sample (i.e. on PUT or DELETE operations)
     async fn on_sample(&mut self, sample: Sample) -> ZResult<StorageInsertionResult> {
         // measurement is the path, stripped of the path_prefix if any
-        let mut measurement = sample.key_expr.try_as_str()?;
+        let mut measurement = sample.key_expr.as_str();
         if let Some(prefix) = &self.path_prefix {
             measurement = measurement.strip_prefix(prefix).ok_or_else(|| {
                 zerror!(
@@ -470,10 +470,6 @@ impl Storage for InfluxDbStorage {
                 let _ = self.schedule_measurement_drop(measurement).await;
                 Ok(StorageInsertionResult::Deleted)
             }
-            SampleKind::Patch => {
-                warn!("Received PATCH for {}: not yet supported", sample.key_expr);
-                Ok(StorageInsertionResult::Outdated)
-            }
         }
     }
 
@@ -481,7 +477,7 @@ impl Storage for InfluxDbStorage {
     async fn on_query(&mut self, query: Query) -> ZResult<()> {
         // get the query's Selector
         let selector = query.selector();
-        let selector_str = selector.key_selector.try_as_str()?;
+        let selector_str = selector.key_expr.as_str();
         // if a path_prefix is used
         let regex = if let Some(prefix) = &self.path_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
@@ -569,12 +565,19 @@ impl Storage for InfluxDbStorage {
                                         }
                                     };
                                     let value = Value { payload, encoding };
-                                    query
+                                    if let Err(e) = query
                                         .reply(
-                                            Sample::new(res_name.clone(), value)
-                                                .with_timestamp(timestamp),
+                                            Sample::new(
+                                                KeyExpr::try_from(res_name.clone()).unwrap(),
+                                                value,
+                                            )
+                                            .with_timestamp(timestamp),
                                         )
-                                        .await;
+                                        .res()
+                                        .await
+                                    {
+                                        log::error!("{}", e)
+                                    }
                                 }
                             }
                         }
