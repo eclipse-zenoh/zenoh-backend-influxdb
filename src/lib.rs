@@ -27,9 +27,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zenoh::buf::ZBuf;
+use zenoh::prelude::r#async::AsyncResolve;
 use zenoh::prelude::*;
-use zenoh::time::new_reception_timestamp;
-use zenoh::time::Timestamp;
+use zenoh::time::{new_reception_timestamp, Timestamp};
 use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
@@ -38,7 +38,7 @@ use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
 use zenoh_buffers::SplitBuffer;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
-use zenoh_core::{bail, zerror, AsyncResolve};
+use zenoh_core::{bail, zerror};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -408,7 +408,7 @@ impl Storage for InfluxDbStorage {
 
                 // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
                 let (base64, strvalue) =
-                    match String::from_utf8(sample.value.payload.contiguous().into_owned()) {
+                    match String::from_utf8(sample.payload.contiguous().into_owned()) {
                         Ok(s) => (false, s),
                         Err(err) => (true, base64::encode(err.into_bytes())),
                     };
@@ -576,7 +576,12 @@ impl Storage for InfluxDbStorage {
                                         .res()
                                         .await
                                     {
-                                        log::error!("{}", e)
+                                        log::error!(
+                                            "Error replying to query on {} with {}: {}",
+                                            selector_str,
+                                            res_name,
+                                            e
+                                        );
                                     }
                                 }
                             }
