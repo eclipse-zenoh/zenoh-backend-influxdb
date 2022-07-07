@@ -482,13 +482,20 @@ impl Storage for InfluxDbStorage {
         let regex = if let Some(prefix) = &self.path_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
             // the selector, if those keys had the path_prefix.
-            let path_exprs = utils::get_sub_key_selectors(selector_str, prefix);
+            let path_exprs = utils::get_sub_key_selectors(&selector.key_expr, prefix);
             debug!(
                 "Query on {} with path_prefix={} => sub_key_selectors = {:?}",
                 selector, prefix, path_exprs
             );
+            let path_exprs = path_exprs?;
             // convert the sub-path expressions into an Influx regex
-            path_exprs_to_influx_regex(&path_exprs)
+            path_exprs_to_influx_regex(
+                path_exprs
+                    .iter()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<&str>>()
+                    .as_slice(),
+            )
         } else {
             // convert the Selector's path expression into an Influx regex
             path_exprs_to_influx_regex(&[selector_str])
@@ -564,7 +571,7 @@ impl Storage for InfluxDbStorage {
                                             continue;
                                         }
                                     };
-                                    let value = Value { payload, encoding };
+                                    let value = Value::new(payload).encoding(encoding);
                                     if let Err(e) = query
                                         .reply(
                                             Sample::new(
@@ -880,26 +887,29 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
 }
 
 fn clauses_from_selector(s: &Selector) -> ZResult<String> {
-    let value_selector = s.parse_value_selector()?;
+    let (starttime, stoptime) =
+        s.decode_value_selector()
+            .fold((None, None), |(start, stop), (k, v)| match k.as_ref() {
+                "starttime" => (Some(v), stop),
+                "stoptime" => (start, Some(v)),
+                _ => (start, stop),
+            });
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
-    match (
-        value_selector.properties.get("starttime"),
-        value_selector.properties.get("stoptime"),
-    ) {
+    match (starttime, stoptime) {
         (Some(start), Some(stop)) => {
             result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(start));
+            result.push_str(&normalize_rfc3339(&start));
             result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(stop));
+            result.push_str(&normalize_rfc3339(&stop));
         }
         (Some(start), None) => {
             result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(start));
+            result.push_str(&normalize_rfc3339(&start));
         }
         (None, Some(stop)) => {
             result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(stop));
+            result.push_str(&normalize_rfc3339(&stop));
         }
         _ => {
             //No time selection, return only latest values
