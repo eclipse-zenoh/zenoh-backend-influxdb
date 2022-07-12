@@ -887,7 +887,7 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
 
 fn clauses_from_selector(s: &Selector) -> ZResult<String> {
     use zenoh::selector::{TimeBound, TimeRange};
-    let time_range = s.time_range();
+    let time_range = s.time_range()?;
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
     match time_range {
