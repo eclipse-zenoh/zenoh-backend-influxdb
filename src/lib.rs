@@ -18,9 +18,7 @@ use influxdb::{
     Client, Query as InfluxQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
 use log::{debug, error, warn};
-use regex::Regex;
 use serde::Deserialize;
-use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -29,6 +27,7 @@ use uuid::Uuid;
 use zenoh::buf::ZBuf;
 use zenoh::prelude::r#async::AsyncResolve;
 use zenoh::prelude::*;
+use zenoh::selector::TimeExpr;
 use zenoh::time::{new_reception_timestamp, Timestamp};
 use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
@@ -887,31 +886,36 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
 }
 
 fn clauses_from_selector(s: &Selector) -> ZResult<String> {
-    let (starttime, stoptime) =
-        s.decode_value_selector()
-            .fold((None, None), |(start, stop), (k, v)| match k.as_ref() {
-                "starttime" => (Some(v), stop),
-                "stoptime" => (start, Some(v)),
-                _ => (start, stop),
-            });
+    use zenoh::selector::{TimeBound, TimeRange};
+    let time_range = s.time_range();
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
-    match (starttime, stoptime) {
-        (Some(start), Some(stop)) => {
-            result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(&start));
-            result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(&stop));
+    match time_range {
+        Some(TimeRange(start, stop)) => {
+            match start {
+                TimeBound::Inclusive(t) => {
+                    result.push_str(" AND time >= ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Exclusive(t) => {
+                    result.push_str(" AND time > ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Unbounded => {}
+            }
+            match stop {
+                TimeBound::Inclusive(t) => {
+                    result.push_str(" AND time <= ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Exclusive(t) => {
+                    result.push_str(" AND time < ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Unbounded => {}
+            }
         }
-        (Some(start), None) => {
-            result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(&start));
-        }
-        (None, Some(stop)) => {
-            result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(&stop));
-        }
-        _ => {
+        None => {
             //No time selection, return only latest values
             result.push_str(" ORDER BY time DESC LIMIT 1");
         }
@@ -919,58 +923,12 @@ fn clauses_from_selector(s: &Selector) -> ZResult<String> {
     Ok(result)
 }
 
-// Surrounds with `''` all parts of `time` matching a RFC3339 time representation
-// to comply with InfluxDB time clauses.
-fn normalize_rfc3339(time: &str) -> Cow<str> {
-    lazy_static::lazy_static! {
-        static ref RE: Regex = Regex::new(
-            "(?:'?(?P<rfc3339>[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T]?[0-9:.]*Z?)'?)"
-        )
-        .unwrap();
+fn write_timeexpr(s: &mut String, t: TimeExpr) {
+    use humantime::format_rfc3339;
+    use std::fmt::Write;
+    match t {
+        TimeExpr::Fixed(t) => write!(s, "'{}'", format_rfc3339(t)),
+        TimeExpr::Now { offset_secs } => write!(s, "now(){:+}s", offset_secs),
     }
-
-    RE.replace_all(time, "'$rfc3339'")
-}
-
-#[test]
-fn test_normalize_rfc3339() {
-    // test no surrounding with '' if not rfc3339 time
-    assert_eq!("now()", normalize_rfc3339("now()"));
-    assert_eq!("now()-1h", normalize_rfc3339("now()-1h"));
-
-    // test surrounding with ''
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'",
-        normalize_rfc3339("2020-11-05T16:31:42.226942997Z")
-    );
-    assert_eq!(
-        "'2020-11-05T16:31:42Z'",
-        normalize_rfc3339("2020-11-05T16:31:42Z")
-    );
-    assert_eq!(
-        "'2020-11-05 16:31:42.226942997'",
-        normalize_rfc3339("2020-11-05 16:31:42.226942997")
-    );
-    assert_eq!("'2020-11-05'", normalize_rfc3339("2020-11-05"));
-
-    // test no surrounding with '' if already done
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'",
-        normalize_rfc3339("'2020-11-05T16:31:42.226942997Z'")
-    );
-
-    // test surrounding with '' only the rfc3339 time
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'-1h",
-        normalize_rfc3339("2020-11-05T16:31:42.226942997Z-1h")
-    );
-    assert_eq!(
-        "'2020-11-05T16:31:42Z'-1h",
-        normalize_rfc3339("2020-11-05T16:31:42Z-1h")
-    );
-    assert_eq!(
-        "'2020-11-05 16:31:42.226942997'-1h",
-        normalize_rfc3339("2020-11-05 16:31:42.226942997-1h")
-    );
-    assert_eq!("'2020-11-05'-1h", normalize_rfc3339("2020-11-05-1h"));
+    .unwrap()
 }
