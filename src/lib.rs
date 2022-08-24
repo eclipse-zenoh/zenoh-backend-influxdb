@@ -24,9 +24,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zenoh::buffers::ZBuf;
+use zenoh::buffers::{SplitBuffer, ZBuf};
 use zenoh::prelude::r#async::AsyncResolve;
 use zenoh::prelude::*;
+use zenoh::properties::Properties;
 use zenoh::selector::TimeExpr;
 use zenoh::time::{new_reception_timestamp, Timestamp};
 use zenoh::Result as ZResult;
@@ -35,8 +36,6 @@ use zenoh_backend_traits::config::{
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_buffers::SplitBuffer;
-use zenoh_cfg_properties::Properties;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_core::{bail, zerror};
 
