@@ -15,8 +15,8 @@ services:
     image: eclipse/zenoh
     restart: unless-stopped
     ports:
-      - 7447:7447
-      - 7447:7447/udp
+      - 7447:7447/tcp
+      - 7446:7446/udp
       - 8000:8000
     volumes:
       - ./zenoh_docker:/root/.zenoh
@@ -27,6 +27,7 @@ services:
 
 volumes:
   influxdb-volume:
+
 
 networks:
   zenoh-nw:
