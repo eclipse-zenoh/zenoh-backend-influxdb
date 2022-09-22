@@ -15,28 +15,27 @@
 use async_std::task;
 use async_trait::async_trait;
 use influxdb::{
-    Client, Query as InfluxQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
+    Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
 use log::{debug, error, warn};
-use regex::Regex;
 use serde::Deserialize;
-use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zenoh::buf::ZBuf;
+use zenoh::buffers::{SplitBuffer, ZBuf};
+use zenoh::prelude::r#async::AsyncResolve;
 use zenoh::prelude::*;
-use zenoh::time::new_reception_timestamp;
-use zenoh::time::Timestamp;
+use zenoh::properties::Properties;
+use zenoh::selector::TimeExpr;
+use zenoh::time::{new_reception_timestamp, Timestamp};
 use zenoh::Result as ZResult;
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_buffers::SplitBuffer;
 use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_core::{bail, zerror};
 
@@ -58,6 +57,7 @@ const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 const GIT_VERSION: &str = git_version::git_version!(prefix = "v", cargo_prefix = "v");
 lazy_static::lazy_static!(
     static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
+    static ref INFLUX_REGEX_ALL: String = path_exprs_to_influx_regex(&["**".try_into().unwrap()]);
 );
 
 #[allow(dead_code)]
@@ -174,18 +174,6 @@ impl Volume for InfluxDbBackend {
     }
 
     async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
-        let path_expr = config.key_expr.clone();
-        let path_prefix = if config.strip_prefix.is_empty() {
-            None
-        } else if path_expr.starts_with(&config.strip_prefix) {
-            Some(config.strip_prefix.clone())
-        } else {
-            bail!(
-                "The specified strip_prefix={} is not a prefix of key_expr={}",
-                &config.strip_prefix,
-                &path_expr
-            )
-        };
         let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
             None => bail!("influxdb backed storages need some volume-specific configuration"),
@@ -264,10 +252,9 @@ impl Volume for InfluxDbBackend {
         }
 
         Ok(Box::new(InfluxDbStorage {
-            admin_status: config,
+            config,
             admin_client,
             client,
-            path_prefix,
             on_closure,
             timer: Timer::default(),
         }))
@@ -307,10 +294,9 @@ impl TryFrom<&Properties> for OnClosure {
 }
 
 struct InfluxDbStorage {
-    admin_status: StorageConfig,
+    config: StorageConfig,
     admin_client: Client,
     client: Client,
-    path_prefix: Option<String>,
     on_closure: OnClosure,
     timer: Timer,
 }
@@ -322,7 +308,7 @@ impl InfluxDbStorage {
             timestamp: String,
         }
 
-        let query = <dyn InfluxQuery>::raw_read_query(format!(
+        let query = InfluxRQuery::new(format!(
             r#"SELECT "timestamp" FROM "{}" WHERE kind='DEL' ORDER BY time DESC LIMIT 1"#,
             measurement
         ));
@@ -369,27 +355,38 @@ impl InfluxDbStorage {
         self.timer.add_async(event).await;
         handle
     }
+
+    fn keyexpr_from_serie(&self, serie_name: &str) -> ZResult<OwnedKeyExpr> {
+        // reconstruct the key expression from the measurement name (same as serie.name), adding back strip_prefix if specified
+        if let Some(prefix) = &self.config.strip_prefix {
+            prefix.join(serie_name)
+        } else {
+            serie_name.try_into()
+        }
+    }
 }
 
 #[async_trait]
 impl Storage for InfluxDbStorage {
     fn get_admin_status(&self) -> serde_json::Value {
         // TODO: possibly add more properties in returned Value for more information about this storage
-        self.admin_status.to_json_value()
+        self.config.to_json_value()
     }
 
     // When receiving a Sample (i.e. on PUT or DELETE operations)
     async fn on_sample(&mut self, sample: Sample) -> ZResult<StorageInsertionResult> {
-        // measurement is the path, stripped of the path_prefix if any
-        let mut measurement = sample.key_expr.try_as_str()?;
-        if let Some(prefix) = &self.path_prefix {
-            measurement = measurement.strip_prefix(prefix).ok_or_else(|| {
-                zerror!(
+        // measurement is the key expression, stripped of the strip_prefix if any
+        let measurement = match &self.config.strip_prefix {
+            Some(prefix) => match sample.key_expr.as_str().strip_prefix(prefix.as_str()) {
+                Some(s) => &s[1..], // also remove the intermediate '/'
+                None => bail!(
                     "Received a Sample not starting with path_prefix '{}'",
                     prefix
-                )
-            })?;
-        }
+                ),
+            },
+            None => sample.key_expr.as_str(),
+        };
+
         // Note: assume that uhlc timestamp was generated by a clock using UNIX_EPOCH (that's the case by default)
         let sample_ts = sample.timestamp.unwrap_or_else(new_reception_timestamp);
         let influx_time = sample_ts.get_time().to_duration().as_nanos();
@@ -408,7 +405,7 @@ impl Storage for InfluxDbStorage {
 
                 // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
                 let (base64, strvalue) =
-                    match String::from_utf8(sample.value.payload.contiguous().into_owned()) {
+                    match String::from_utf8(sample.payload.contiguous().into_owned()) {
                         Ok(s) => (false, s),
                         Err(err) => (true, base64::encode(err.into_bytes())),
                     };
@@ -438,7 +435,7 @@ impl Storage for InfluxDbStorage {
             SampleKind::Delete => {
                 // delete all points from the measurement that are older than this DELETE message
                 // (in case more recent PUT have been recevived un-ordered)
-                let query = <dyn InfluxQuery>::raw_read_query(format!(
+                let query = InfluxRQuery::new(format!(
                     r#"DELETE FROM "{}" WHERE time < {}"#,
                     measurement, influx_time
                 ));
@@ -470,10 +467,6 @@ impl Storage for InfluxDbStorage {
                 let _ = self.schedule_measurement_drop(measurement).await;
                 Ok(StorageInsertionResult::Deleted)
             }
-            SampleKind::Patch => {
-                warn!("Received PATCH for {}: not yet supported", sample.key_expr);
-                Ok(StorageInsertionResult::Outdated)
-            }
         }
     }
 
@@ -481,21 +474,25 @@ impl Storage for InfluxDbStorage {
     async fn on_query(&mut self, query: Query) -> ZResult<()> {
         // get the query's Selector
         let selector = query.selector();
-        let selector_str = selector.key_selector.try_as_str()?;
-        // if a path_prefix is used
-        let regex = if let Some(prefix) = &self.path_prefix {
+        let selector_str = selector.key_expr.as_str();
+        // if a strip_prefix is used
+        let regex = if let Some(prefix) = &self.config.strip_prefix {
             // get the list of sub-path expressions that will match the same stored keys than
-            // the selector, if those keys had the path_prefix.
-            let path_exprs = utils::get_sub_key_selectors(selector_str, prefix);
+            // the selector, if those keys had the strip_prefix.
+            let vec = selector.key_expr.strip_prefix(prefix);
+            if vec.is_empty() {
+                warn!("Received query on selector '{}', but the configured strip_prefix='{:?}' is not a prefix of this selector", selector, self.config.strip_prefix);
+                return Ok(());
+            }
             debug!(
-                "Query on {} with path_prefix={} => sub_key_selectors = {:?}",
-                selector, prefix, path_exprs
+                "Query on {} with strip_prefix={} => sub-keyexprs = {:?}",
+                selector, prefix, vec
             );
             // convert the sub-path expressions into an Influx regex
-            path_exprs_to_influx_regex(&path_exprs)
+            path_exprs_to_influx_regex(vec.as_slice())
         } else {
             // convert the Selector's path expression into an Influx regex
-            path_exprs_to_influx_regex(&[selector_str])
+            path_exprs_to_influx_regex(&[selector.key_expr.as_keyexpr()])
         };
 
         // construct the Influx query clauses from the Selector
@@ -503,7 +500,7 @@ impl Storage for InfluxDbStorage {
 
         // the Influx query
         let influx_query_str = format!("SELECT * FROM {} {}", regex, clauses);
-        let influx_query = <dyn InfluxQuery>::raw_read_query(&influx_query_str);
+        let influx_query = InfluxRQuery::new(&influx_query_str);
 
         // the expected JSon type resulting from the query
         #[derive(Deserialize, Debug)]
@@ -523,15 +520,23 @@ impl Storage for InfluxDbStorage {
                 while !query_result.results.is_empty() {
                     match query_result.deserialize_next::<ZenohPoint>() {
                         Ok(retn) => {
+                            // for each serie
                             for serie in retn.series {
-                                // reconstruct the path from the measurement name (same as serie.name)
-                                let mut res_name = String::with_capacity(serie.name.len());
-                                if let Some(p) = &self.path_prefix {
-                                    res_name.push_str(p);
-                                }
-                                res_name.push_str(&serie.name);
-                                debug!("Replying {} values for {}", serie.values.len(), res_name);
+                                // get the key expression from the serie name
+                                let ke = match self.keyexpr_from_serie(&serie.name) {
+                                    Ok(k) => k,
+                                    Err(e) => {
+                                        error!(
+                                            "Error replying with serie '{}' : {}",
+                                            serie.name, e
+                                        );
+                                        continue;
+                                    }
+                                };
+                                debug!("Replying {} values for {}", serie.values.len(), ke);
+                                // for each point
                                 for zpoint in serie.values {
+                                    // get the encoding
                                     let encoding_prefix =
                                         zpoint.encoding_prefix.try_into().map_err(|_| {
                                             zerror!("Unknown encoding {}", zpoint.encoding_prefix)
@@ -544,6 +549,7 @@ impl Storage for InfluxDbStorage {
                                             zpoint.encoding_suffix.into(),
                                         )
                                     };
+                                    // get the payload
                                     let payload = if zpoint.base64 {
                                         match base64::decode(zpoint.value) {
                                             Ok(v) => ZBuf::from(v),
@@ -558,6 +564,7 @@ impl Storage for InfluxDbStorage {
                                     } else {
                                         ZBuf::from(zpoint.value.into_bytes())
                                     };
+                                    // get the timestamp
                                     let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
                                         Ok(t) => t,
                                         Err(e) => {
@@ -568,13 +575,23 @@ impl Storage for InfluxDbStorage {
                                             continue;
                                         }
                                     };
-                                    let value = Value { payload, encoding };
-                                    query
+                                    let value = Value::new(payload).encoding(encoding);
+                                    // send the reply
+                                    if let Err(e) = query
                                         .reply(
-                                            Sample::new(res_name.clone(), value)
+                                            Sample::new(ke.clone(), value)
                                                 .with_timestamp(timestamp),
                                         )
-                                        .await;
+                                        .res()
+                                        .await
+                                    {
+                                        log::error!(
+                                            "Error replying to query on {} with {}: {}",
+                                            selector_str,
+                                            ke,
+                                            e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -597,14 +614,12 @@ impl Storage for InfluxDbStorage {
         }
     }
 
-    async fn get_all_entries(&self) -> ZResult<Vec<(String, Timestamp)>> {
+    async fn get_all_entries(&self) -> ZResult<Vec<(OwnedKeyExpr, Timestamp)>> {
         let mut result = Vec::new();
 
-        let regex = path_exprs_to_influx_regex(&["**"]);
-
         // the Influx query
-        let influx_query_str = format!("SELECT * FROM {}", regex);
-        let influx_query = <dyn InfluxQuery>::raw_read_query(&influx_query_str);
+        let influx_query_str = format!("SELECT * FROM {}", *INFLUX_REGEX_ALL);
+        let influx_query = InfluxRQuery::new(&influx_query_str);
 
         // the expected JSon type resulting from the query
         #[derive(Deserialize, Debug)]
@@ -620,27 +635,30 @@ impl Storage for InfluxDbStorage {
                 while !query_result.results.is_empty() {
                     match query_result.deserialize_next::<ZenohPoint>() {
                         Ok(retn) => {
+                            // for each serie
                             for serie in retn.series {
-                                // reconstruct the path from the measurement name (same as serie.name)
-                                let mut res_name = String::with_capacity(serie.name.len());
-                                if let Some(p) = &self.path_prefix {
-                                    res_name.push_str(p);
-                                }
-                                res_name.push_str(&serie.name);
-                                debug!("Replying {} values for {}", serie.values.len(), res_name);
-                                for zpoint in serie.values {
-                                    let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
-                                        Ok(t) => t,
-                                        Err(e) => {
-                                            warn!(
-                                                r#"Failed to decode zenoh Timestamp from Influx point {} with timestamp="{}": {:?}"#,
-                                                serie.name, zpoint.timestamp, e
-                                            );
-                                            continue;
+                                // get the key expression from the serie name
+                                match self.keyexpr_from_serie(&serie.name) {
+                                    Ok(ke) => {
+                                        debug!("Replying {} values for {}", serie.values.len(), ke);
+                                        // for each point in the serie
+                                        for zpoint in serie.values {
+                                            // get the timestamp (ignore the point if failing)
+                                            match Timestamp::from_str(&zpoint.timestamp) {
+                                                Ok(timestamp) => {
+                                                    result.push((ke.clone(), timestamp))
+                                                }
+                                                Err(e) => warn!(
+                                                    r#"Failed to decode zenoh Timestamp from Influx point {} with timestamp="{}": {:?}"#,
+                                                    serie.name, zpoint.timestamp, e
+                                                ),
+                                            };
                                         }
-                                    };
-                                    result.push((res_name.to_string(), timestamp));
-                                }
+                                    }
+                                    Err(e) => {
+                                        error!("Error replying with serie '{}' : {}", serie.name, e)
+                                    }
+                                };
                             }
                         }
                         Err(e) => {
@@ -671,8 +689,7 @@ impl Drop for InfluxDbStorage {
                 let _ = task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
-                    let query =
-                        <dyn InfluxQuery>::raw_read_query(format!(r#"DROP DATABASE "{}""#, db));
+                    let query = InfluxRQuery::new(format!(r#"DROP DATABASE "{}""#, db));
                     if let Err(e) = self.admin_client.query(&query).await {
                         error!("Failed to drop InfluxDb database '{}' : {}", db, e)
                     }
@@ -685,7 +702,7 @@ impl Drop for InfluxDbStorage {
                         "Close InfluxDB storage, dropping all series from database {}",
                         db
                     );
-                    let query = <dyn InfluxQuery>::raw_read_query("DROP SERIES FROM /.*/");
+                    let query = InfluxRQuery::new("DROP SERIES FROM /.*/");
                     if let Err(e) = self.client.query(&query).await {
                         error!(
                             "Failed to drop all series from InfluxDb database '{}' : {}",
@@ -719,7 +736,7 @@ impl Timed for TimedMeasurementDrop {
         }
 
         // check if there is at least 1 point without "DEL" kind in the measurement
-        let query = <dyn InfluxQuery>::raw_read_query(format!(
+        let query = InfluxRQuery::new(format!(
             r#"SELECT "kind" FROM "{}" WHERE kind!='DEL' LIMIT 1"#,
             self.measurement
         ));
@@ -748,10 +765,7 @@ impl Timed for TimedMeasurementDrop {
         }
 
         // drop the measurement
-        let query = <dyn InfluxQuery>::raw_read_query(format!(
-            r#"DROP MEASUREMENT "{}""#,
-            self.measurement
-        ));
+        let query = InfluxRQuery::new(format!(r#"DROP MEASUREMENT "{}""#, self.measurement));
         debug!(
             "Drop measurement {} after timeout with Influx query: {:?}",
             self.measurement, query
@@ -766,7 +780,7 @@ impl Timed for TimedMeasurementDrop {
 }
 
 fn generate_db_name() -> String {
-    format!("zenoh_db_{}", Uuid::new_v4().to_simple())
+    format!("zenoh_db_{}", Uuid::new_v4().simple())
 }
 
 async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
@@ -774,7 +788,7 @@ async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
     struct Database {
         name: String,
     }
-    let query = <dyn InfluxQuery>::raw_read_query("SHOW DATABASES");
+    let query = InfluxRQuery::new("SHOW DATABASES");
     debug!("List databases with Influx query: {:?}", query);
     match client.json_query(query).await {
         Ok(mut result) => match result.deserialize_next::<Database>() {
@@ -806,7 +820,7 @@ async fn create_db(
     db_name: &str,
     storage_username: Option<String>,
 ) -> ZResult<()> {
-    let query = <dyn InfluxQuery>::raw_read_query(format!(r#"CREATE DATABASE "{}""#, db_name));
+    let query = InfluxRQuery::new(format!(r#"CREATE DATABASE "{}""#, db_name));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
         bail!(
@@ -818,10 +832,7 @@ async fn create_db(
 
     // is a username is specified for storage access, grant him access to the database
     if let Some(username) = storage_username {
-        let query = <dyn InfluxQuery>::raw_read_query(format!(
-            r#"GRANT ALL ON "{}" TO "{}""#,
-            db_name, username
-        ));
+        let query = InfluxRQuery::new(format!(r#"GRANT ALL ON "{}" TO "{}""#, db_name, username));
         debug!(
             "Grant access to {} on Influx database: {}",
             username, db_name
@@ -842,7 +853,7 @@ async fn create_db(
 // corresponding to the list of path expressions. I.e.:
 // Replace "**" with ".*", "*" with "[^\/]*"  and "/" with "\/".
 // Concat each with "|", and surround the result with '/^' and '$/'.
-fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
+fn path_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
     let mut result = String::with_capacity(2 * path_exprs[0].len());
     result.push_str("/^");
     for (i, path_expr) in path_exprs.iter().enumerate() {
@@ -872,28 +883,36 @@ fn path_exprs_to_influx_regex(path_exprs: &[&str]) -> String {
 }
 
 fn clauses_from_selector(s: &Selector) -> ZResult<String> {
-    let value_selector = s.parse_value_selector()?;
+    use zenoh::selector::{TimeBound, TimeRange};
+    let time_range = s.time_range()?;
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
-    match (
-        value_selector.properties.get("starttime"),
-        value_selector.properties.get("stoptime"),
-    ) {
-        (Some(start), Some(stop)) => {
-            result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(start));
-            result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(stop));
+    match time_range {
+        Some(TimeRange(start, stop)) => {
+            match start {
+                TimeBound::Inclusive(t) => {
+                    result.push_str(" AND time >= ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Exclusive(t) => {
+                    result.push_str(" AND time > ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Unbounded => {}
+            }
+            match stop {
+                TimeBound::Inclusive(t) => {
+                    result.push_str(" AND time <= ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Exclusive(t) => {
+                    result.push_str(" AND time < ");
+                    write_timeexpr(&mut result, t);
+                }
+                TimeBound::Unbounded => {}
+            }
         }
-        (Some(start), None) => {
-            result.push_str(" AND time >= ");
-            result.push_str(&normalize_rfc3339(start));
-        }
-        (None, Some(stop)) => {
-            result.push_str(" AND time <= ");
-            result.push_str(&normalize_rfc3339(stop));
-        }
-        _ => {
+        None => {
             //No time selection, return only latest values
             result.push_str(" ORDER BY time DESC LIMIT 1");
         }
@@ -901,58 +920,12 @@ fn clauses_from_selector(s: &Selector) -> ZResult<String> {
     Ok(result)
 }
 
-// Surrounds with `''` all parts of `time` matching a RFC3339 time representation
-// to comply with InfluxDB time clauses.
-fn normalize_rfc3339(time: &str) -> Cow<str> {
-    lazy_static::lazy_static! {
-        static ref RE: Regex = Regex::new(
-            "(?:'?(?P<rfc3339>[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T]?[0-9:.]*Z?)'?)"
-        )
-        .unwrap();
+fn write_timeexpr(s: &mut String, t: TimeExpr) {
+    use humantime::format_rfc3339;
+    use std::fmt::Write;
+    match t {
+        TimeExpr::Fixed(t) => write!(s, "'{}'", format_rfc3339(t)),
+        TimeExpr::Now { offset_secs } => write!(s, "now(){:+}s", offset_secs),
     }
-
-    RE.replace_all(time, "'$rfc3339'")
-}
-
-#[test]
-fn test_normalize_rfc3339() {
-    // test no surrounding with '' if not rfc3339 time
-    assert_eq!("now()", normalize_rfc3339("now()"));
-    assert_eq!("now()-1h", normalize_rfc3339("now()-1h"));
-
-    // test surrounding with ''
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'",
-        normalize_rfc3339("2020-11-05T16:31:42.226942997Z")
-    );
-    assert_eq!(
-        "'2020-11-05T16:31:42Z'",
-        normalize_rfc3339("2020-11-05T16:31:42Z")
-    );
-    assert_eq!(
-        "'2020-11-05 16:31:42.226942997'",
-        normalize_rfc3339("2020-11-05 16:31:42.226942997")
-    );
-    assert_eq!("'2020-11-05'", normalize_rfc3339("2020-11-05"));
-
-    // test no surrounding with '' if already done
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'",
-        normalize_rfc3339("'2020-11-05T16:31:42.226942997Z'")
-    );
-
-    // test surrounding with '' only the rfc3339 time
-    assert_eq!(
-        "'2020-11-05T16:31:42.226942997Z'-1h",
-        normalize_rfc3339("2020-11-05T16:31:42.226942997Z-1h")
-    );
-    assert_eq!(
-        "'2020-11-05T16:31:42Z'-1h",
-        normalize_rfc3339("2020-11-05T16:31:42Z-1h")
-    );
-    assert_eq!(
-        "'2020-11-05 16:31:42.226942997'-1h",
-        normalize_rfc3339("2020-11-05 16:31:42.226942997-1h")
-    );
-    assert_eq!("'2020-11-05'-1h", normalize_rfc3339("2020-11-05-1h"));
+    .unwrap()
 }

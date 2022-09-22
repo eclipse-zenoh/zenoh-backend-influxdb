@@ -20,6 +20,8 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
+:warning: InfluxDB 2.x is not yet supported. InfluxDB 1.8 minimum is required.
+
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
 The following documentation related to the version currently in development in "master" branch: 0.6.x.
@@ -46,26 +48,26 @@ You can setup storages either at zenoh router startup via a configuration file, 
         // configuration of "storage_manager" plugin:
         storage_manager: {
           volumes: {
-            // configuration of a "influxdb" backend (the "zbackend_influxdb" library will be loaded at startup)
+            // configuration of a "influxdb" volume (the "zbackend_influxdb" backend library will be loaded at startup)
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
               private: {
-                // InfluxDB credentials, preferably admin for databases creation and drop
-                username: "admin",
-                password: "password"
+                // If needed: InfluxDB credentials, preferably admin for databases creation and drop
+                //username: "admin",
+                //password: "password"
               }
             }
           },
           storages: {
-            // configuration of a "demo" storage using the "influxdb" backend
+            // configuration of a "demo" storage using the "influxdb" volume
             demo: {
               // the key expression this storage will subscribes to
-              key_expr: "/demo/example/**",
+              key_expr: "demo/example/**",
               // this prefix will be stripped from the received key when converting to database key.
-              // i.e.: "/demo/example/a/b" will be stored as "a/b"
+              // i.e.: "demo/example/a/b" will be stored as "a/b"
               // this option is optional
-              strip_prefix: "/demo/example",
+              strip_prefix: "demo/example",
               volume: {
                 id: "influxdb",
                 // the database name within InfluxDB
@@ -75,14 +77,16 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 // strategy on storage closure
                 on_closure: "drop_db",
                 private: {
-                  // InfluxDB credentials, with read/write privileges for the database
-                  username: "user",
-                  password: "password"
+                  // If needed: InfluxDB credentials, with read/write privileges for the database
+                  //username: "user",
+                  //password: "password"
                 }
               }
             }
           }
-        }
+        },
+        // Optionally, add the REST plugin
+        rest: { http_port: 8000 }
       }
     }
     ```
@@ -91,12 +95,12 @@ You can setup storages either at zenoh router startup via a configuration file, 
 
 ### **Setup at runtime via `curl` commands on the admin space**
 
-  - Run the zenoh router without any specific configuration, but loading the storages plugin:  
-    `zenohd -P storages`
-  - Add the "influxdbn" backend (the "zbackend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
+  - Run the zenoh router :  
+    `zenohd`
+  - Add the "influxdb" volume (the "zbackend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
     `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb`
- - Add the "demo" storage using the "influxdb" backend:
-   `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"/demo/example/**",volume:{id:"influxdb",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
+  - Add the "demo" storage using the "influxdb" volume:
+    `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"demo/example/**",volume:{id:"influxdb",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
 
 ### **Tests using the REST API**
 
@@ -107,8 +111,8 @@ curl -X PUT -d "TEST-1" http://localhost:8000/demo/example/test
 curl -X PUT -d "TEST-2" http://localhost:8000/demo/example/test
 curl -X PUT -d "TEST-3" http://localhost:8000/demo/example/test
 
-# Retrive them as a time serie
-curl http://localhost:8000/demo/example/test?(starttime=0)
+# Retrive them as a time serie where '_time=[..]' means "infinite time range"
+curl -g 'http://localhost:8000/demo/example/test?_time=[..]'
 ```
 
 <!-- TODO: after release of eclipse/zenoh:0.6.0 update wrt. conf file and uncomment this:
@@ -180,22 +184,22 @@ After a delay (5 seconds), the measurement corresponding to the deleted key is d
 ### Behaviour on GET
 On GET operations, by default the storage returns only the latest point for each key/measurement.
 This is to be coherent with other backends technologies that only store 1 value per-key.  
-If you want to get time-series as a result of a GET operation, you need to specify the `"starttime"` and/or `"stoptime"`
-properties in your [Selector](../abstractions#selector).
+If you want to get time-series as a result of a GET operation, you need to specify a time range via
+the `"_time"`argument in your [Selector](https://github.com/eclipse-zenoh/roadmap/tree/main/rfcs/ALL/Selectors).
 
 Examples of selectors:
 ```bash
   # get the complete time-series
-  /demo/example/**?(starttime=0)
+  /demo/example/**?_time=[..]
 
   # get points within a fixed date interval
-  /demo/example/influxdb/**?(starttime=2020-01-01;starttime=2020-01-02T12:00:00.000000000Z)
+  /demo/example/influxdb/**?_time=[2020-01-01T00:00:00Z..2020-01-02T12:00:00.000000000Z]
 
   # get points within a relative date interval
-  /demo/example/influxdb/**?(starttime=now()-2d;stoptime=now()-1d)
+  /demo/example/influxdb/**?_time=[now(-2d)..now(-1d)]
 ```
 
-The `"starttime"` and `"stoptime"` properties support the InfluxDB **[time syntax](https://docs.influxdata.com/influxdb/v1.8/query_language/explore-data/#time-syntax)** (*<rfc3339_date_time_string>*, *<rfc3339_like_date_time_string>*, *<epoch_time>* and relative time using `now()`).
+See the [`"_time"` RFC](https://github.com/eclipse-zenoh/roadmap/blob/main/rfcs/ALL/Selectors/_time.md) for a complete description of the time range format
 
 
 -------------------------------
@@ -204,8 +208,8 @@ The `"starttime"` and `"stoptime"` properties support the InfluxDB **[time synta
 At first, install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). 
 
 :warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
-built with the exact same Rust version than `zenohd`. Otherwise, incompatibilities in memory mapping
-of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
+built with the exact same Rust version than `zenohd`, and using for `zenoh` dependency the same version (or commit number) than 'zenohd'.
+Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 
 To know the Rust version you're `zenohd` has been built with, use the `--version` option.  
 Example:
@@ -220,8 +224,12 @@ Install and use this toolchain with the following command:
 $ rustup default 1.57.0
 ```
 
-And then build the backend with:
+And `zenohd` version corresponds to an un-released commit with id `1f20c86`. Update the `zenoh` dependency in Cargo.lock with this command:
+```bash
+$ cargo update -p zenoh --precise 1f20c86
+```
 
+Then build the backend with:
 ```bash
 $ cargo build --release --all-targets
 ```
