@@ -686,7 +686,7 @@ impl Drop for InfluxDbStorage {
         debug!("Closing InfluxDB storage");
         match self.on_closure {
             OnClosure::DropDb => {
-                let _ = task::block_on(async move {
+                task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
                     let query = InfluxRQuery::new(format!(r#"DROP DATABASE "{}""#, db));
@@ -696,7 +696,7 @@ impl Drop for InfluxDbStorage {
                 });
             }
             OnClosure::DropSeries => {
-                let _ = task::block_on(async move {
+                task::block_on(async move {
                     let db = self.client.database_name();
                     debug!(
                         "Close InfluxDB storage, dropping all series from database {}",
