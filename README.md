@@ -215,13 +215,13 @@ To know the Rust version you're `zenohd` has been built with, use the `--version
 Example:
 ```bash
 $ zenohd --version
-The zenoh router v0.6.0-dev-24-g1f20c86 built with rustc 1.57.0 (f1edd0429 2021-11-29)
+The zenoh router v0.6.0-beta.1 built with rustc 1.64.0 (a55dd71d5 2022-09-19)
 ```
-Here, `zenohd` has been built with the rustc version `1.57.0`.  
+Here, `zenohd` has been built with the rustc version `1.64.0`.  
 Install and use this toolchain with the following command:
 
 ```bash
-$ rustup default 1.57.0
+$ rustup default 1.64.0
 ```
 
 And `zenohd` version corresponds to an un-released commit with id `1f20c86`. Update the `zenoh` dependency in Cargo.lock with this command:
