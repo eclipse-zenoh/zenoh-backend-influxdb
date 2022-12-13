@@ -3226,6 +3226,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenoh-backend-influxdb"
+version = "0.7.0-rc"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "base64 0.13.1",
+ "env_logger",
+ "git-version",
+ "humantime",
+ "influxdb",
+ "lazy_static",
+ "log",
+ "rustc_version 0.4.0",
+ "serde",
+ "serde_json",
+ "uuid",
+ "zenoh",
+ "zenoh-collections",
+ "zenoh-core",
+ "zenoh_backend_traits",
+]
+
+[[package]]
 name = "zenoh-buffers"
 version = "0.7.0-rc"
 source = "git+https://github.com/eclipse-zenoh/zenoh.git?branch=master#7b8411e658d2db6d28ed581035e7754d2ef366be"
@@ -3550,29 +3573,6 @@ dependencies = [
  "zenoh-core",
  "zenoh-crypto",
  "zenoh-sync",
-]
-
-[[package]]
-name = "zenoh_backend_influxdb"
-version = "0.7.0-rc"
-dependencies = [
- "async-std",
- "async-trait",
- "base64 0.13.1",
- "env_logger",
- "git-version",
- "humantime",
- "influxdb",
- "lazy_static",
- "log",
- "rustc_version 0.4.0",
- "serde",
- "serde_json",
- "uuid",
- "zenoh",
- "zenoh-collections",
- "zenoh-core",
- "zenoh_backend_traits",
 ]
 
 [[package]]
