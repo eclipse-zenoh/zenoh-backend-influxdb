@@ -122,7 +122,7 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     };
 
     // The InfluxDB client used for administration purposes (show/create/drop databases)
-    let mut admin_client = Client::new(&url, "");
+    let mut admin_client = Client::new(url, "");
 
     // Note: remove username/password from properties to not re-expose them in admin_status
     let credentials = match (
