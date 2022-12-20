@@ -218,7 +218,7 @@ See the [`"_time"` RFC](https://github.com/eclipse-zenoh/roadmap/blob/main/rfcs/
 
 At first, install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). 
 
-:warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
+> :warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
 built with the exact same Rust version than `zenohd`, and using for `zenoh` dependency the same version (or commit number) than 'zenohd'.
 Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 
