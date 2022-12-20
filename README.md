@@ -25,7 +25,7 @@ This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxd
 to implement the storages.
 Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
 
-:point_right: **Download stable versions:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
+:point_right: **Install latest release:** see [below](#How-to-install-it)
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
@@ -209,6 +209,32 @@ Examples of selectors:
 ```
 
 See the [`"_time"` RFC](https://github.com/eclipse-zenoh/roadmap/blob/main/rfcs/ALL/Selectors/_time.md) for a complete description of the time range format
+
+
+-------------------------------
+## How to install it
+
+To install the latest release of this backend library, you can do as follows:
+
+### Manual installation (all platforms)
+
+All release packages can be downloaded from:  
+ - https://download.eclipse.org/zenoh/zenoh-backend-influxdb/latest/   
+
+Each subdirectory has the name of the Rust target. See the platforms each target corresponds to on https://doc.rust-lang.org/stable/rustc/platform-support.html
+
+Choose your platform and download the `.zip` file.  
+Unzip it in the same directory than `zenohd` or to any directory where it can find the backend library (e.g. /usr/lib or ~/.zenoh/lib)
+
+### Linux Debian
+
+Add Eclipse Zenoh private repository to the sources list, and install the `zenoh-backend-influxdb` package:
+
+```bash
+echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
+sudo apt update
+sudo apt install zenoh-backend-influxdb
+```
 
 
 -------------------------------
