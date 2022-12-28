@@ -6,9 +6,18 @@
 [![License](https://img.shields.io/badge/License-EPL%202.0-blue)](https://choosealicense.com/licenses/epl-2.0/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# InfluxDB backend for Eclipse zenoh
+# Eclipse Zenoh
 
-In zenoh a backend is a storage technology (such as DBMS, time-series database, file system...) alowing to store the
+The Eclipse Zenoh: Zero Overhead Pub/sub, Store/Query and Compute.
+
+Zenoh (pronounce _/zeno/_) unifies data in motion, data at rest and computations. It carefully blends traditional pub/sub with geo-distributed storages, queries and computations, while retaining a level of time and space efficiency that is well beyond any of the mainstream stacks.
+
+Check the website [zenoh.io](http://zenoh.io) and the [roadmap](https://github.com/eclipse-zenoh/roadmap) for more detailed information.
+
+-------------------------------
+# InfluxDB backend
+
+In Zenoh a backend is a storage technology (such as DBMS, time-series database, file system...) alowing to store the
 keys/values publications made via zenoh and return them on queries.
 See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more details.
 
@@ -16,7 +25,7 @@ This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxd
 to implement the storages.
 Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
 
-:point_right: **Download stable versions:** https://download.eclipse.org/zenoh/zenoh-backend-influxdb/
+:point_right: **Install latest release:** see [below](#How-to-install-it)
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
@@ -203,11 +212,39 @@ See the [`"_time"` RFC](https://github.com/eclipse-zenoh/roadmap/blob/main/rfcs/
 
 
 -------------------------------
+## How to install it
+
+To install the latest release of this backend library, you can do as follows:
+
+### Manual installation (all platforms)
+
+All release packages can be downloaded from:  
+ - https://download.eclipse.org/zenoh/zenoh-backend-influxdb/latest/   
+
+Each subdirectory has the name of the Rust target. See the platforms each target corresponds to on https://doc.rust-lang.org/stable/rustc/platform-support.html
+
+Choose your platform and download the `.zip` file.  
+Unzip it in the same directory than `zenohd` or to any directory where it can find the backend library (e.g. /usr/lib or ~/.zenoh/lib)
+
+### Linux Debian
+
+Add Eclipse Zenoh private repository to the sources list, and install the `zenoh-backend-influxdb` package:
+
+```bash
+echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
+sudo apt update
+sudo apt install zenoh-backend-influxdb
+```
+
+
+-------------------------------
 ## How to build it
+
+> :warning: **WARNING** :warning: : Zenoh and its ecosystem are under active development. When you build from git, make sure you also build from git any other Zenoh repository you plan to use (e.g. binding, plugin, backend, etc.). It may happen that some changes in git are not compatible with the most recent packaged Zenoh release (e.g. deb, docker, pip). We put particular effort in mantaining compatibility between the various git repositories in the Zenoh project. 
 
 At first, install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). 
 
-:warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
+> :warning: **WARNING** :warning: : As Rust doesn't have a stable ABI, the backend library should be
 built with the exact same Rust version than `zenohd`, and using for `zenoh` dependency the same version (or commit number) than 'zenohd'.
 Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 

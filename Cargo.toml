@@ -12,8 +12,10 @@
 #   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 #
 [package]
-name = "zenoh_backend_influxdb"
-version = "0.6.0-beta.1"
+name = "zenoh-backend-influxdb"
+version = "0.7.0-rc"
+repository = "https://github.com/eclipse-zenoh/zenoh-backend-influxdb"
+homepage = "http://zenoh.io"
 authors = [
     "kydos <angelo@icorsaro.net>",
     "Julien Enoch <julien@enoch.fr>",
@@ -21,16 +23,19 @@ authors = [
     "Luca Cominardi <luca.cominardi@zettascale.tech>",
 ]
 edition = "2018"
+license = " EPL-2.0 OR Apache-2.0"
+categories = ["network-programming", "database"]
+description = "Backend for Zenoh using InfluxDB"
 
 [lib]
 name = "zbackend_influxdb"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 async-std = "=1.12.0"
 async-trait = "0.1.57"
-base64 = "0.13.0"
-env_logger = "0.9.1"
+base64 = "0.20.0"
+env_logger = "0.10.0"
 git-version = "0.3.5"
 humantime = "2.1.0"
 influxdb = { version = "0.5.2", default-features = false, features = [
@@ -57,4 +62,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
 license-file = ["LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.6.0~dev.0)"
+depends = "zenoh-plugin-storage-manager (=0.7.0-rc)"
