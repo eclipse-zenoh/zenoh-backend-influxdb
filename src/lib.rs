@@ -36,8 +36,8 @@ use zenoh_backend_traits::config::{
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_collections::{Timed, TimedEvent, TimedHandle, Timer};
 use zenoh_core::{bail, zerror};
+use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
 // Properies used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
