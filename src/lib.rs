@@ -14,7 +14,7 @@
 
 use async_std::task;
 use async_trait::async_trait;
-use base64::{Engine, engine::general_purpose::STANDARD as b64_std_engine};
+use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use influxdb::{
     Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
