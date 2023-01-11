@@ -14,6 +14,7 @@
 
 use async_std::task;
 use async_trait::async_trait;
+use base64::{Engine, engine::general_purpose::STANDARD as b64_std_engine};
 use influxdb::{
     Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
@@ -407,7 +408,7 @@ impl Storage for InfluxDbStorage {
                 let (base64, strvalue) =
                     match String::from_utf8(sample.payload.contiguous().into_owned()) {
                         Ok(s) => (false, s),
-                        Err(err) => (true, base64::encode(err.into_bytes())),
+                        Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
                     };
 
                 // Note: tags are stored as strings in InfluxDB, while fileds are typed.
@@ -551,7 +552,7 @@ impl Storage for InfluxDbStorage {
                                     };
                                     // get the payload
                                     let payload = if zpoint.base64 {
-                                        match base64::decode(zpoint.value) {
+                                        match b64_std_engine.decode(zpoint.value) {
                                             Ok(v) => ZBuf::from(v),
                                             Err(e) => {
                                                 warn!(
