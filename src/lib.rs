@@ -310,8 +310,7 @@ impl InfluxDbStorage {
         }
 
         let query = InfluxRQuery::new(format!(
-            r#"SELECT "timestamp" FROM "{}" WHERE kind='DEL' ORDER BY time DESC LIMIT 1"#,
-            measurement
+            r#"SELECT "timestamp" FROM "{measurement}" WHERE kind='DEL' ORDER BY time DESC LIMIT 1"#
         ));
         match self.client.json_query(query).await {
             Ok(mut result) => match result.deserialize_next::<QueryResult>() {
@@ -437,8 +436,7 @@ impl Storage for InfluxDbStorage {
                 // delete all points from the measurement that are older than this DELETE message
                 // (in case more recent PUT have been recevived un-ordered)
                 let query = InfluxRQuery::new(format!(
-                    r#"DELETE FROM "{}" WHERE time < {}"#,
-                    measurement, influx_time
+                    r#"DELETE FROM "{measurement}" WHERE time < {influx_time}"#
                 ));
                 debug!("Delete {} with Influx query: {:?}", sample.key_expr, query);
                 if let Err(e) = self.client.query(&query).await {
@@ -500,7 +498,7 @@ impl Storage for InfluxDbStorage {
         let clauses = clauses_from_selector(&selector)?;
 
         // the Influx query
-        let influx_query_str = format!("SELECT * FROM {} {}", regex, clauses);
+        let influx_query_str = format!("SELECT * FROM {regex} {clauses}");
         let influx_query = InfluxRQuery::new(&influx_query_str);
 
         // the expected JSon type resulting from the query
@@ -690,7 +688,7 @@ impl Drop for InfluxDbStorage {
                 task::block_on(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
-                    let query = InfluxRQuery::new(format!(r#"DROP DATABASE "{}""#, db));
+                    let query = InfluxRQuery::new(format!(r#"DROP DATABASE "{db}""#));
                     if let Err(e) = self.admin_client.query(&query).await {
                         error!("Failed to drop InfluxDb database '{}' : {}", db, e)
                     }
@@ -821,7 +819,7 @@ async fn create_db(
     db_name: &str,
     storage_username: Option<String>,
 ) -> ZResult<()> {
-    let query = InfluxRQuery::new(format!(r#"CREATE DATABASE "{}""#, db_name));
+    let query = InfluxRQuery::new(format!(r#"CREATE DATABASE "{db_name}""#));
     debug!("Create Influx database: {}", db_name);
     if let Err(e) = client.query(&query).await {
         bail!(
@@ -833,7 +831,7 @@ async fn create_db(
 
     // is a username is specified for storage access, grant him access to the database
     if let Some(username) = storage_username {
-        let query = InfluxRQuery::new(format!(r#"GRANT ALL ON "{}" TO "{}""#, db_name, username));
+        let query = InfluxRQuery::new(format!(r#"GRANT ALL ON "{db_name}" TO "{username}""#));
         debug!(
             "Grant access to {} on Influx database: {}",
             username, db_name
@@ -926,7 +924,7 @@ fn write_timeexpr(s: &mut String, t: TimeExpr) {
     use std::fmt::Write;
     match t {
         TimeExpr::Fixed(t) => write!(s, "'{}'", format_rfc3339(t)),
-        TimeExpr::Now { offset_secs } => write!(s, "now(){:+}s", offset_secs),
+        TimeExpr::Now { offset_secs } => write!(s, "now(){offset_secs:+}s"),
     }
     .unwrap()
 }
