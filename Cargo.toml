@@ -29,7 +29,7 @@ categories = ["network-programming", "database"]
 description = "Backend for Zenoh using InfluxDB"
 
 [lib]
-name = "zbackend_influxdb"
+name = "zenoh_backend_influxdb"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
