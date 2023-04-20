@@ -23,7 +23,7 @@ See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more de
 
 This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxdb/) server
 to implement the storages.
-Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zbackend_influxdb`**.
+Its library name (without OS specific prefix and extension) that zenoh will rely on to find it and load it is **`zenoh_backend_influxdb`**.
 
 :point_right: **Install latest release:** see [below](#How-to-install-it)
 
@@ -43,7 +43,7 @@ For previous versions see the README and code of the corresponding tagged versio
 ## **Examples of usage**
 
 Prerequisites:
- - You have a zenoh router (`zenohd`) installed, and the `zbackend_influxdb` library file is available in `~/.zenoh/lib`.
+ - You have a zenoh router (`zenohd`) installed, and the `zenoh_backend_influxdb` library file is available in `~/.zenoh/lib`.
  - You have an InfluxDB service running and listening on `http://localhost:8086`
 
 You can setup storages either at zenoh router startup via a configuration file, either at runtime via the zenoh admin space, using for instance the REST API.
@@ -57,7 +57,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
         // configuration of "storage_manager" plugin:
         storage_manager: {
           volumes: {
-            // configuration of a "influxdb" volume (the "zbackend_influxdb" backend library will be loaded at startup)
+            // configuration of a "influxdb" volume (the "zenoh_backend_influxdb" backend library will be loaded at startup)
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
@@ -106,7 +106,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
 
   - Run the zenoh router, with write permissions to its admin space:  
     `zenohd --adminspace-permissions rw`
-  - Add the "influxdb" volume (the "zbackend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
+  - Add the "influxdb" volume (the "zenoh_backend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
     `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb`
   - Add the "demo" storage using the "influxdb" volume:
     `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"demo/example/**",volume:{id:"influxdb",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
@@ -129,7 +129,7 @@ curl -g 'http://localhost:8000/demo/example/test?_time=[..]'
 ### **Usage with `eclipse/zenoh` Docker image**
 Alternatively, you can test running both the zenoh router and the InfluxDB service in Docker containers:
  - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/master/docker-compose.yml) file
- - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzbackend_influxdb.so` library
+ - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzenoh_backend_influxdb.so` library
    for `x86_64-unknown-linux-musl` target within.
  - Start the containers running 
    ```bash
