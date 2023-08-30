@@ -512,7 +512,7 @@ impl Storage for InfluxDbStorage {
             // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
             kind: String,
             timestamp: String,
-            encoding_prefix: ZInt,
+            encoding_prefix: u8,
             encoding_suffix: String,
             base64: bool,
             value: String,
