@@ -607,7 +607,10 @@ impl Storage for InfluxDbStorage {
         let mut result = Vec::new();
 
         // the Influx query: 1 entry == 1 measurement => get only 1 point per measurement (the more recent timestamp)
-        let influx_query_str = format!("SELECT * FROM {} ORDER BY time DESC LIMIT 1", *INFLUX_REGEX_ALL);
+        let influx_query_str = format!(
+            "SELECT * FROM {} ORDER BY time DESC LIMIT 1",
+            *INFLUX_REGEX_ALL
+        );
         let influx_query = InfluxRQuery::new(&influx_query_str);
 
         // the expected JSon type resulting from the query
