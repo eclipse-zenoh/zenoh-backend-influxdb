@@ -869,7 +869,7 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
                         }
                     }
                 }
-                '/' => result.push_str(r#"\/"#),
+                '/' => result.push_str(r"\/"),
                 _ => result.push(c),
             }
         }
