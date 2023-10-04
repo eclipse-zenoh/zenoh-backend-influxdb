@@ -13,7 +13,7 @@
 #
 [package]
 name = "zenoh-backend-influxdb"
-version = "0.10.0-dev"
+version = "0.11.0-dev"
 repository = "https://github.com/eclipse-zenoh/zenoh-backend-influxdb"
 homepage = "http://zenoh.io"
 authors = [
@@ -63,4 +63,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
 license-file = ["LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.10.0-dev)"
+depends = "zenoh-plugin-storage-manager (=0.11.0-dev)"
