@@ -29,8 +29,6 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
-:warning: InfluxDB 2.x is not yet supported. InfluxDB 1.8 minimum is required.
-
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
 The following documentation related to the version currently in development in "master" branch: 0.6.x.
@@ -62,9 +60,11 @@ You can setup storages either at zenoh router startup via a configuration file, 
               // URL to the InfluxDB service
               url: "http://localhost:8086",
               private: {
-                // If needed: InfluxDB credentials, preferably admin for databases creation and drop
+                // If needed: InfluxDB v1 credentials, preferably admin for databases creation and drop
                 //username: "admin",
                 //password: "password"
+                // Required: InfluxDB v2 token, preferably admin for databases creation and drop
+                //token: "token"
               }
             }
           },
@@ -86,9 +86,11 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 // strategy on storage closure
                 on_closure: "drop_db",
                 private: {
-                  // If needed: InfluxDB credentials, with read/write privileges for the database
+                  // If needed: InfluxDB v1 credentials, with read/write privileges for the database
                   //username: "user",
                   //password: "password"
+                  // Required: InfluxDB v2 token, with read/write privileges for the database
+                  //token: "token"
                 }
               }
             }
@@ -144,11 +146,16 @@ InfluxDB-backed volumes need some configuration to work:
 
 - **`"url"`** (**required**) : a URL to the InfluxDB service. Example: `http://localhost:8086`
 
+#### InfluxDB 1.8 or older:
+
 - **`"username"`** (optional) : an [InfluxDB admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#admin-users) user name. It will be used for creation of databases, granting read/write privileges of databases mapped to storages and dropping of databases and measurements.
 
 - **`"password"`** (optional) : the admin user's password.
 
-Both `username` and `password` should be hidden behind a `private` gate, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
+#### For InfluxDB 2.0 or newer:
+- **`"token"`** (required) : an [InfluxDB admin token](https://docs.influxdata.com/influxdb/v2/admin/tokens/). It will be used for creation of databases, granting read/write privileges of databases mapped to storages and dropping of databases and measurements.
+
+> `token`, `username` and `password` should be hidden behind a `private` gate, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
 
 -------------------------------
 ## Volume-specific storage configuration
