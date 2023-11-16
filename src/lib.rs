@@ -66,10 +66,9 @@ lazy_static::lazy_static!(
 #[allow(dead_code)]
 const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
-fn get_private_conf<'a>(
-    config: &'a serde_json::Map<String, serde_json::Value>,
-    credit: &str,
-) -> ZResult<Option<&'a String>> {
+type Config<'a> = &'a serde_json::Map<String, serde_json::Value>;
+
+fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a String>> {
     match config.get_private(credit) {
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
