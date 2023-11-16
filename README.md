@@ -101,12 +101,12 @@ You can setup storages either at zenoh router startup via a configuration file, 
       }
     }
     ```
-  - Run the zenoh router with:  
+  - Run the zenoh router with:
     `zenohd -c zenoh.json5`
 
 ### **Setup at runtime via `curl` commands on the admin space**
 
-  - Run the zenoh router, with write permissions to its admin space:  
+  - Run the zenoh router, with write permissions to its admin space:
     `zenohd --adminspace-permissions rw`
   - Add the "influxdb" volume (the "zenoh_backend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
     `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb`
@@ -133,7 +133,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
  - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/master/docker-compose.yml) file
  - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzenoh_backend_influxdb.so` library
    for `x86_64-unknown-linux-musl` target within.
- - Start the containers running 
+ - Start the containers running
    ```bash
    docker-compose up -d
    ```
@@ -171,18 +171,20 @@ Storages relying on a `influxdb` backed volume may have additional configuration
   - `"drop_db"`: the database is dropped (i.e. removed)
   - `"drop_series"`: all the series (measurements) are dropped and the database remains empty.
 
-- **`"username"`** (optional, string) : an InfluxDB user name (usually [non-admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#non-admin-users)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
+- **`"username"`** (optional, string) : an InfluxDB v1 user name (usually [non-admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#non-admin-users)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
 
-- **`"password"`** (optional, string) : the user's password.
+- **`"password"`** (optional, string) : an InfluxDB v1 user's password.
+
+- **`"token"`** (required, string) : an InfluxDB v2 token (usually [with limited privileges](https://docs.influxdata.com/influxdb/v2/admin/tokens/create-token/#create-a-token-using-the-influx-cli)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
 
 -------------------------------
 ## **Behaviour of the backend**
 
 ### Mapping to InfluxDB concepts
-Each **storage** will map to an InfluxDB **database**.  
+Each **storage** will map to an InfluxDB **database**.
 Each **key** to store will map to an InfluxDB
 [**measurement**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#measurement)
-named with the key stripped from the `"strip_prefix"` property (see below).  
+named with the key stripped from the `"strip_prefix"` property (see below).
 Each **key/value** put into the storage will map to an InfluxDB
 [**point**](https://docs.influxdata.com/influxdb/v1.8/concepts/key_concepts/#point) reusing the timestamp set by zenoh
 (but with a precision of nanoseconds). The fileds and tags of the point is are the following:
@@ -199,7 +201,7 @@ After a delay (5 seconds), the measurement corresponding to the deleted key is d
 
 ### Behaviour on GET
 On GET operations, by default the storage returns only the latest point for each key/measurement.
-This is to be coherent with other backends technologies that only store 1 value per-key.  
+This is to be coherent with other backends technologies that only store 1 value per-key.
 If you want to get time-series as a result of a GET operation, you need to specify a time range via
 the `"_time"`argument in your [Selector](https://github.com/eclipse-zenoh/roadmap/tree/main/rfcs/ALL/Selectors).
 
@@ -225,12 +227,12 @@ To install the latest release of this backend library, you can do as follows:
 
 ### Manual installation (all platforms)
 
-All release packages can be downloaded from:  
- - https://download.eclipse.org/zenoh/zenoh-backend-influxdb/latest/   
+All release packages can be downloaded from:
+ - https://download.eclipse.org/zenoh/zenoh-backend-influxdb/latest/
 
 Each subdirectory has the name of the Rust target. See the platforms each target corresponds to on https://doc.rust-lang.org/stable/rustc/platform-support.html
 
-Choose your platform and download the `.zip` file.  
+Choose your platform and download the `.zip` file.
 Unzip it in the same directory than `zenohd` or to any directory where it can find the backend library (e.g. /usr/lib or ~/.zenoh/lib)
 
 ### Linux Debian
@@ -247,7 +249,7 @@ sudo apt install zenoh-backend-influxdb
 -------------------------------
 ## How to build it
 
-> :warning: **WARNING** :warning: : Zenoh and its ecosystem are under active development. When you build from git, make sure you also build from git any other Zenoh repository you plan to use (e.g. binding, plugin, backend, etc.). It may happen that some changes in git are not compatible with the most recent packaged Zenoh release (e.g. deb, docker, pip). We put particular effort in mantaining compatibility between the various git repositories in the Zenoh project. 
+> :warning: **WARNING** :warning: : Zenoh and its ecosystem are under active development. When you build from git, make sure you also build from git any other Zenoh repository you plan to use (e.g. binding, plugin, backend, etc.). It may happen that some changes in git are not compatible with the most recent packaged Zenoh release (e.g. deb, docker, pip). We put particular effort in mantaining compatibility between the various git repositories in the Zenoh project.
 
 At first, install [Cargo and Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). If you already have the Rust toolchain installed, make sure it is up-to-date with:
 
@@ -259,13 +261,13 @@ $ rustup update
 built with the exact same Rust version than `zenohd`, and using for `zenoh` dependency the same version (or commit number) than 'zenohd'.
 Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 
-To know the Rust version you're `zenohd` has been built with, use the `--version` option.  
+To know the Rust version you're `zenohd` has been built with, use the `--version` option.
 Example:
 ```bash
 $ zenohd --version
 The zenoh router v0.6.0-beta.1 built with rustc 1.64.0 (a55dd71d5 2022-09-19)
 ```
-Here, `zenohd` has been built with the rustc version `1.64.0`.  
+Here, `zenohd` has been built with the rustc version `1.64.0`.
 Install and use this toolchain with the following command:
 
 ```bash
