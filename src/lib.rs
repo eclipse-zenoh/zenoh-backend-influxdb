@@ -39,12 +39,12 @@ use zenoh_backend_traits::*;
 use zenoh_core::{bail, zerror};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
-// Properies used by the Backend
+// Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
 pub const PROP_BACKEND_USERNAME: &str = "username";
 pub const PROP_BACKEND_PASSWORD: &str = "password";
 
-// Properies used by the Storage
+// Properties used by the Storage
 pub const PROP_STORAGE_DB: &str = "db";
 pub const PROP_STORAGE_CREATE_DB: &str = "create_db";
 pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
