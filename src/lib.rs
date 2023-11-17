@@ -452,6 +452,10 @@ impl Storage for InfluxDbStorage {
         .add_field("value", strvalue);
         debug!("Put {:?} with Influx query: {:?}", measurement, query);
         if let Err(e) = self.client.query(&query).await {
+            error!(
+                "Failed to write. Does not have write permissions for the db: {:?}",
+                e
+            );
             bail!(
                 "Failed to put Value for {:?} in InfluxDb storage : {}",
                 measurement,

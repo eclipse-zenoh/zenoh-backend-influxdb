@@ -64,6 +64,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 //username: "admin",
                 //password: "password"
                 // Required: InfluxDB v2 token, preferably admin for databases creation and drop
+                //NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating and dropping the database but it is still required to keep a token value here
                 //token: "token"
               }
             }
@@ -80,11 +81,15 @@ You can setup storages either at zenoh router startup via a configuration file, 
               volume: {
                 id: "influxdb",
                 // the database name within InfluxDB
+                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating the database so this db should already exist
                 db: "zenoh_example",
+
                 // if the database doesn't exist, create it
-                create_db: true,
+                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating the database so this value should be kept false
+                create_db: false,
                 // strategy on storage closure
-                on_closure: "drop_db",
+                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for dropping the database so this should NOT be kept to drop_db
+                on_closure: "do_nothing",
                 private: {
                   // If needed: InfluxDB v1 credentials, with read/write privileges for the database
                   //username: "user",
