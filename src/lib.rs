@@ -39,17 +39,16 @@ use zenoh_backend_traits::*;
 use zenoh_core::{bail, zerror};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
-// Properies used by the Backend
+// Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
-pub const PROP_BACKEND_USERNAME: &str = "username";
-pub const PROP_BACKEND_PASSWORD: &str = "password";
+pub const PROP_USERNAME: &str = "username";
+pub const PROP_PASSWORD: &str = "password";
+pub const PROP_TOKEN: &str = "token";
 
-// Properies used by the Storage
+// Properties used by the Storage
 pub const PROP_STORAGE_DB: &str = "db";
 pub const PROP_STORAGE_CREATE_DB: &str = "create_db";
 pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
-pub const PROP_STORAGE_USERNAME: &str = PROP_BACKEND_USERNAME;
-pub const PROP_STORAGE_PASSWORD: &str = PROP_BACKEND_PASSWORD;
 
 // Special key for None (when the prefix being stripped exactly matches the key)
 pub const NONE_KEY: &str = "@@none_key@@";
@@ -66,10 +65,9 @@ lazy_static::lazy_static!(
 #[allow(dead_code)]
 const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
-fn get_private_conf<'a>(
-    config: &'a serde_json::Map<String, serde_json::Value>,
-    credit: &str,
-) -> ZResult<Option<&'a String>> {
+type Config<'a> = &'a serde_json::Map<String, serde_json::Value>;
+
+fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a String>> {
     match config.get_private(credit) {
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
@@ -103,6 +101,31 @@ fn get_private_conf<'a>(
     }
 }
 
+// Keep in mind that Influx v1 allows access without credentials
+fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
+    if let Ok(Some(token)) = get_private_conf(&config, PROP_TOKEN) {
+        return Ok(Some(InfluxDbCredentials::Token(token.clone())));
+    }
+
+    match (
+        get_private_conf(&config, PROP_USERNAME)?,
+        get_private_conf(&config, PROP_PASSWORD)?,
+    ) {
+        (Some(username), Some(password)) => Ok(Some(InfluxDbCredentials::Login((
+            username.clone(),
+            password.clone(),
+        )))),
+        (None, None) => Ok(None),
+        _ => {
+            bail!(
+                "Optional properties `{}` and `{}` must coexist",
+                PROP_USERNAME,
+                PROP_PASSWORD
+            )
+        }
+    }
+}
+
 #[no_mangle]
 pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // For some reasons env_logger is sometime not active in a loaded library.
@@ -127,24 +150,16 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // The InfluxDB client used for administration purposes (show/create/drop databases)
     let mut admin_client = Client::new(url, "");
 
-    // Note: remove username/password from properties to not re-expose them in admin_status
-    let credentials = match (
-        get_private_conf(&config.rest, PROP_BACKEND_USERNAME)?,
-        get_private_conf(&config.rest, PROP_BACKEND_PASSWORD)?,
-    ) {
-        (Some(username), Some(password)) => {
+    let credentials = extract_credentials(&config.rest)?;
+    match &credentials {
+        Some(InfluxDbCredentials::Token(token)) => {
+            admin_client = admin_client.with_token(token);
+        }
+        Some(InfluxDbCredentials::Login((username, password))) => {
             admin_client = admin_client.with_auth(username, password);
-            Some((username.clone(), password.clone()))
         }
-        (None, None) => None,
-        _ => {
-            bail!(
-                "Optional properties `{}` and `{}` must coexist",
-                PROP_BACKEND_USERNAME,
-                PROP_BACKEND_PASSWORD
-            )
-        }
-    };
+        _ => {}
+    }
 
     // Check connectivity to InfluxDB, trying to list databases
     match async_std::task::block_on(async { show_databases(&admin_client).await }) {
@@ -164,10 +179,18 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     }))
 }
 
+// Enum to take care of different credential forms
+// Keep in mind that influx v1 allow access without credentials
+#[derive(Debug)]
+enum InfluxDbCredentials {
+    Token(String),
+    Login((String, String)),
+}
+
 pub struct InfluxDbBackend {
     admin_status: VolumeConfig,
     admin_client: Client,
-    credentials: Option<(String, String)>,
+    credentials: Option<InfluxDbCredentials>,
 }
 
 #[async_trait]
@@ -220,22 +243,16 @@ impl Volume for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
 
         // Use credentials if specified in storage's volume config
-        let storage_username = match (
-            get_private_conf(volume_cfg, PROP_STORAGE_USERNAME)?,
-            get_private_conf(volume_cfg, PROP_STORAGE_PASSWORD)?,
-        ) {
-            (Some(username), Some(password)) => {
-                client = client.with_auth(username, password);
+        let storage_username = match extract_credentials(&volume_cfg)? {
+            Some(InfluxDbCredentials::Token(token)) => {
+                client = client.with_token(token);
+                None
+            }
+            Some(InfluxDbCredentials::Login((username, password))) => {
+                client = client.with_auth(&username, password);
                 Some(username.clone())
             }
-            (None, None) => None,
-            _ => {
-                bail!(
-                    "Optional properties `{}` and `{}` must coexist",
-                    PROP_STORAGE_USERNAME,
-                    PROP_STORAGE_PASSWORD
-                )
-            }
+            _ => None,
         };
 
         // Check if the database exists (using storages credentials)
@@ -258,8 +275,14 @@ impl Volume for InfluxDbBackend {
 
         // The Influx client on database with backend's credentials (admin), to drop measurements and database
         let mut admin_client = Client::new(self.admin_client.database_url(), db);
-        if let Some((username, password)) = &self.credentials {
-            admin_client = admin_client.with_auth(username, password);
+        match &self.credentials {
+            Some(InfluxDbCredentials::Token(token)) => {
+                admin_client = admin_client.with_token(token);
+            }
+            Some(InfluxDbCredentials::Login((username, password))) => {
+                admin_client = admin_client.with_auth(username, password);
+            }
+            _ => {}
         }
 
         Ok(Box::new(InfluxDbStorage {
@@ -429,6 +452,10 @@ impl Storage for InfluxDbStorage {
         .add_field("value", strvalue);
         debug!("Put {:?} with Influx query: {:?}", measurement, query);
         if let Err(e) = self.client.query(&query).await {
+            error!(
+                "Failed to write. Does not have write permissions for the db: {:?}",
+                e
+            );
             bail!(
                 "Failed to put Value for {:?} in InfluxDb storage : {}",
                 measurement,
