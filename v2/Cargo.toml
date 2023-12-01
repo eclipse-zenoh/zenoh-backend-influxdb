@@ -1,0 +1,57 @@
+[package]
+name = "zenoh-backend-influxdb-v2"
+version = "0.11.0-dev"
+repository = "https://github.com/eclipse-zenoh/zenoh-backend-influxdb"
+homepage = "http://zenoh.io"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+categories.workspace = true
+description = "for v1.x of influxdb"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "zenoh_backend_influxdb"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+stats = ["zenoh/stats"]
+
+
+[dependencies]
+async-std = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+env_logger = { workspace = true }
+git-version = { workspace = true }
+
+rand = "0.8.5"
+futures = "0.3.28"
+influxdb2 = "0.4.4"
+influxdb2-structmap = "0.2"
+num-traits = "0.2"
+influxdb2-derive = "0.1.1"
+chrono = { version = "0.4.31", features = ["serde"] }
+
+lazy_static = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+zenoh = { workspace = true }
+zenoh_backend_traits = { workspace = true }
+zenoh-collections = { workspace = true }
+zenoh-core = { workspace = true }
+zenoh-util = { workspace = true }
+
+[build-dependencies]
+rustc_version = "0.4.0"
+
+[package.metadata.deb]
+name = "zenoh-backend-influxdb"
+maintainer = "zenoh-dev@eclipse.org"
+copyright = "2022 ZettaScale Technology"
+section = "net"
+license-file = ["LICENSE", "0"]
+depends = "zenoh-plugin-storage-manager (=0.11.0-dev)"
