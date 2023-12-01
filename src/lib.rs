@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zenoh::buffers::{SplitBuffer, ZBuf};
+use zenoh::buffers::{buffer::SplitBuffer, ZBuf};
 use zenoh::prelude::*;
 use zenoh::properties::Properties;
 use zenoh::selector::TimeExpr;
@@ -103,13 +103,13 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
 
 // Keep in mind that Influx v1 allows access without credentials
 fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
-    if let Ok(Some(token)) = get_private_conf(&config, PROP_TOKEN) {
+    if let Ok(Some(token)) = get_private_conf(config, PROP_TOKEN) {
         return Ok(Some(InfluxDbCredentials::Token(token.clone())));
     }
 
     match (
-        get_private_conf(&config, PROP_USERNAME)?,
-        get_private_conf(&config, PROP_PASSWORD)?,
+        get_private_conf(config, PROP_USERNAME)?,
+        get_private_conf(config, PROP_PASSWORD)?,
     ) {
         (Some(username), Some(password)) => Ok(Some(InfluxDbCredentials::Login((
             username.clone(),
@@ -243,7 +243,7 @@ impl Volume for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
 
         // Use credentials if specified in storage's volume config
-        let storage_username = match extract_credentials(&volume_cfg)? {
+        let storage_username = match extract_credentials(volume_cfg)? {
             Some(InfluxDbCredentials::Token(token)) => {
                 client = client.with_token(token);
                 None
