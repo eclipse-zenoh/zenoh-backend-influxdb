@@ -56,16 +56,23 @@ You can setup storages either at zenoh router startup via a configuration file, 
         storage_manager: {
           volumes: {
             // configuration of a "influxdb" volume (the "zenoh_backend_influxdb" backend library will be loaded at startup)
+            //this should be named influxdb for v1 and influxdb2 for v2
             influxdb: {
               // URL to the InfluxDB service
               url: "http://localhost:8086",
               private: {
+                //For Influxdb v1.x:
                 // If needed: InfluxDB credentials, preferably admin for databases creation and drop
-                //username: "admin",
-                //password: "password"
-                // Required: InfluxDB v2 token, preferably admin for databases creation and drop
-                //NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating and dropping the database but it is still required to keep a token value here
-                //token: "token"
+                  //username: "admin",
+                  //password: "password"
+                
+                //For Influxdb v2.x:
+                // If needed: InfluxDB credentials, preferably ALL-ACCESS for databases creation and drop
+                //if not ALL-ACCESS then atleast with authorization to create/delete buckets
+                //Note: this should not be left empty for the plugin to work; if you have no admin creds, you can copy the user creds instead
+                 // org_id: "organization ID",
+                //  token: "access token"
+
               }
             }
           },
@@ -79,23 +86,31 @@ You can setup storages either at zenoh router startup via a configuration file, 
               // this option is optional
               strip_prefix: "demo/example",
               volume: {
+                //this will be influxdb for v1 and influxdb2 for v2 (exactly the same name as in volumes section)
                 id: "influxdb",
-                // the database name within InfluxDB
-                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating the database so this db should already exist
+                // the database/bucket name within InfluxDB
                 db: "zenoh_example",
-
                 // if the database doesn't exist, create it
-                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for creating the database so this value should be kept false
                 create_db: false,
                 // strategy on storage closure
-                // NOTE: For influxdb v2.x, the influxdb rust library currently doesn't provide support for dropping the database so this should NOT be kept to drop_db
                 on_closure: "do_nothing",
                 private: {
-                  // If needed: InfluxDB v1 credentials, with read/write privileges for the database
-                  //username: "user",
+
+                  //For Influxdb v1.x:
+                  //Required: InfluxDB credentialsto read-write on the bucket
+                  //username: "admin",
                   //password: "password"
-                  // Required: InfluxDB v2 token, with read/write privileges for the database
-                  //token: "token"
+                
+                //For Influxdb v2.x:
+                  //Required 
+                  //InfluxDB credentials, with read/write privileges for the database
+                  //the org_id value should be the same as for admin
+                    org_id: "organization ID",
+                    //this is a token with either:
+                    //a.) Read-Write access to the existing DB named above in the config (case where db/bucket already exists)
+                    //b.) Read-write access to ALL buckets in the organization so it can access the new bucket created by zenoh;
+                                //(case where a new db/bucket has to be created)
+                    token: "user access token" 
                 }
               }
             }
@@ -152,8 +167,22 @@ InfluxDB-backed volumes need some configuration to work:
 - **`"url"`** (**required**) : a URL to the InfluxDB service. Example: `http://localhost:8086`
 
 #### admin levelcredentials:
-check out the individual documentaions for v1 and v2
 
+
+#### for v1.x
+- **`"username"`** (optional) : an [InfluxDB admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#admin-users) user name. It will be used for creation of databases, granting read/write privileges of databases mapped to storages and dropping of databases and measurements.
+
+- **`"password"`** (optional) : the admin user's password.
+
+Both `username` and `password` should be hidden behind a `private` gate, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
+
+
+#### for v2.x
+- **`"org_id"`** (optional) : an [InfluxDB organizations](https://docs.influxdata.com/influxdb/cloud/admin/organizations/) organization ID.
+
+- **`"token"`** (optional) : the admin user's token. It will be used for creation and dropping of databases. In Influxdb2.x, you can use an ALL ACCESS token for this (https://docs.influxdata.com/influxdb/cloud/admin/tokens/#all-access-token)
+
+Both `org_id` and `token` should be hidden behind a `private` gate, like the "username" and "password" shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
 -------------------------------
 ## Volume-specific storage configuration
 Storages relying on a `influxdb` backed volume may have additional configuration through the `volume` section:
@@ -166,10 +195,21 @@ Storages relying on a `influxdb` backed volume may have additional configuration
 - **`"on_closure"`** (optional, string) : the strategy to use when the Storage is removed. There are 3 options:
   - *unset* or `"do_nothing"`: the database remains untouched (this is the default behaviour)
   - `"drop_db"`: the database is dropped (i.e. removed)
-  - `"drop_series"`: all the series (measurements) are dropped and the database remains empty.
+  - `"drop_series"`: all the series (measurements) are dropped and the database remains empty. This is currently not supported in v2.
 
 ### Volume-specific user credentials:
-  check out the individual documentaions for v1 and v2
+#### for v1.x
+
+- **`"username"`** (optional, string) : an InfluxDB user name (usually [non-admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#non-admin-users)). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
+
+- **`"password"`** (optional, string) : the user's password.
+
+#### for v2.x
+
+- **`"org_id"`** (optional, string) :the user's organization. It should be same as the admin's organization.
+
+- **`"token"`** (optional, string) :  an InfluxDB access token, usually [non-admin](https://docs.influxdata.com/influxdb/cloud/admin/tokens/#readwrite-token). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
+
 
 -------------------------------
 ## **Behaviour of the backend**
@@ -274,7 +314,14 @@ And `zenohd` version corresponds to an un-released commit with id `1f20c86`. Upd
 $ cargo update -p zenoh --precise 1f20c86
 ```
 
-Then build the backend, choose which version you want to build (we are showing the example for v2):
+Then build the backend, you can specify which version you want to build (we are showing the example for v2):
 ```bash
-$ cargo build --release -p zenoh-backend-influxdb_v2
+$ cargo build --release --all-targets -p zenoh-backend-influxdb2
 ```
+You can build both the versions as well:
+```bash
+$ cargo build --release --all-targets
+```
+
+
+
