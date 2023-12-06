@@ -267,24 +267,43 @@ built with the exact same Rust version than `zenohd`, and using for `zenoh` depe
 Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 
 To know the Rust version you're `zenohd` has been built with, use the `--version` option.
-Example:
+
+### Example with a downloaded version:
 ```bash
 $ zenohd --version
-The zenoh router v0.6.0-beta.1 built with rustc 1.64.0 (a55dd71d5 2022-09-19)
+The zenoh router v0.10.0-rc built with rustc 1.72.0 (5680fa18f 2023-08-23)
 ```
-Here, `zenohd` has been built with the rustc version `1.64.0`.
-Install and use this toolchain with the following command:
+Here, `zenohd` is version `0.10.0-rc` has been built with the rustc version `1.72.0`.  
+Install and use this same toolchain with the following command:
 
 ```bash
-$ rustup default 1.64.0
+$ rustup default 1.72.0
 ```
 
-And `zenohd` version corresponds to an un-released commit with id `1f20c86`. Update the `zenoh` dependency in Cargo.lock with this command:
-```bash
-$ cargo update -p zenoh --precise 1f20c86
+And edit the update `Cargo.toml` file to make all the `zenoh` dependencies to use the same version number:
+```toml
+zenoh = { version = "0.10.0-rc", features = [ "unstable" ] }
 ```
 
 Then build the backend with:
 ```bash
 $ cargo build --release --all-targets
+```
+
+### Example with a version built from sources:
+```bash
+$ zenohd --version
+The zenoh router v0.11.0-dev-37-g9f7a37ee built with rustc 1.72.0 (5680fa18f 2023-08-23)
+```
+
+Here, `zenohd` is version under development for the future `0.11.0` with commit id `9f7a37ee`. It has been built with the rustc version `1.72.0`.  
+Install and use this same toolchain with the following command:
+
+```bash
+$ rustup default 1.72.0
+```
+
+And update all the `zenoh` dependencies in `Cargo.lock` to use the commit id:
+```bash
+$ cargo update -p zenoh --precise 9f7a37ee
 ```
