@@ -103,34 +103,6 @@ fn get_private_conf<'a>(
     }
 }
 
-<<<<<<< HEAD:src/lib.rs
-// Keep in mind that Influx v1 allows access without credentials
-fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
-    if let Ok(Some(token)) = get_private_conf(config, PROP_TOKEN) {
-        return Ok(Some(InfluxDbCredentials::Token(token.clone())));
-    }
-
-    match (
-        get_private_conf(config, PROP_USERNAME)?,
-        get_private_conf(config, PROP_PASSWORD)?,
-    ) {
-        (Some(username), Some(password)) => Ok(Some(InfluxDbCredentials::Login((
-            username.clone(),
-            password.clone(),
-        )))),
-        (None, None) => Ok(None),
-        _ => {
-            bail!(
-                "Optional properties `{}` and `{}` must coexist",
-                PROP_USERNAME,
-                PROP_PASSWORD
-            )
-        }
-    }
-}
-
-=======
->>>>>>> 6ac5c08 (refactoring for v1.x and v2.x functionality):v1/src/lib.rs
 #[no_mangle]
 pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // For some reasons env_logger is sometime not active in a loaded library.
@@ -240,7 +212,7 @@ impl Volume for InfluxDbBackend {
                 },
             ),
             None => (generate_db_name(), true),
-            _ => bail!("Error creating storage"),
+            _ => bail!(""),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -248,22 +220,12 @@ impl Volume for InfluxDbBackend {
         let mut client = Client::new(self.admin_client.database_url(), &db);
 
         // Use credentials if specified in storage's volume config
-<<<<<<< HEAD:src/lib.rs
-        let storage_username = match extract_credentials(volume_cfg)? {
-            Some(InfluxDbCredentials::Token(token)) => {
-                client = client.with_token(token);
-                None
-            }
-            Some(InfluxDbCredentials::Login((username, password))) => {
-                client = client.with_auth(&username, password);
-=======
         let storage_username = match (
             get_private_conf(volume_cfg, PROP_STORAGE_USERNAME)?,
             get_private_conf(volume_cfg, PROP_STORAGE_PASSWORD)?,
         ) {
             (Some(username), Some(password)) => {
                 client = client.with_auth(username, password);
->>>>>>> 6ac5c08 (refactoring for v1.x and v2.x functionality):v1/src/lib.rs
                 Some(username.clone())
             }
             (None, None) => None,
