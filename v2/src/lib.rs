@@ -29,7 +29,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use uuid::Uuid;
-use zenoh::buffers::SplitBuffer;
+use zenoh::buffers::buffer::SplitBuffer;
 use zenoh::prelude::*;
 use zenoh::properties::Properties;
 use zenoh::selector::TimeExpr;
