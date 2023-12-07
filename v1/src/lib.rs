@@ -25,7 +25,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
-use zenoh::buffers::{SplitBuffer, ZBuf};
+use zenoh::buffers::{buffer::SplitBuffer, ZBuf};
 use zenoh::prelude::*;
 use zenoh::properties::Properties;
 use zenoh::selector::TimeExpr;
