@@ -212,7 +212,7 @@ impl Volume for InfluxDbBackend {
                 },
             ),
             None => (generate_db_name(), true),
-            _ => bail!(""),
+            _ => bail!("Error creating storage"),
         };
 
         // The Influx client on database used to write/query on this storage
