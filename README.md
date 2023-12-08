@@ -295,8 +295,12 @@ $ cargo build --release --all-targets
 $ zenohd --version
 The zenoh router v0.11.0-dev-37-g9f7a37ee built with rustc 1.72.0 (5680fa18f 2023-08-23)
 ```
+Here, `zenohd` version is `v0.11.0-dev-37-g9f7a37ee` where:
+- `v0.11.0-dev` means it's a development version for the future `v0.11.0` release
+- `-37`means there have been 37 commits since the tag `0.11.0-dev` marking the begining of developments for this future version
+- `-g9f7a37ee` indicates the commit number of sources: `9f7a37ee` (the `g` prefix just meaning "git" shall be ignored)  
 
-Here, `zenohd` is version under development for the future `0.11.0` with commit id `9f7a37ee`. It has been built with the rustc version `1.72.0`.  
+And it has been built with the rustc version `1.72.0`.  
 Install and use this same toolchain with the following command:
 
 ```bash
