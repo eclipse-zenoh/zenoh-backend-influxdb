@@ -555,7 +555,7 @@ impl Storage for InfluxDbStorage {
                 e
             )
         }
-        // schedule the drop of measurement later in the future, if it's empty
+        // schedule_measurement_drop is used to schedule the drop of measurement later in the future, if it's empty
         // influx 2.x doesn't support dropping measurements from the API
         let _ = self.schedule_measurement_drop(measurement.as_str()).await;
         Ok(StorageInsertionResult::Deleted)

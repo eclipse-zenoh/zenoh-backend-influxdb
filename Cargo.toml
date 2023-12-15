@@ -13,7 +13,7 @@
 #
 
 [workspace]
-members = ["zenoh-backend-influxdb", "zenoh-backend-influxdb2"]
+members = ["zenoh-backend-influxdb-v1", "zenoh-backend-influxdb-v2"]
 
 
 [workspace.package]
