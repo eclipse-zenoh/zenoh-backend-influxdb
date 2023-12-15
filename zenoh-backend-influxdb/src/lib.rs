@@ -39,12 +39,12 @@ use zenoh_backend_traits::*;
 use zenoh_core::{bail, zerror};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
-// Properies used by the Backend
+// Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
 pub const PROP_BACKEND_USERNAME: &str = "username";
 pub const PROP_BACKEND_PASSWORD: &str = "password";
 
-// Properies used by the Storage
+// Properties used by the Storage
 pub const PROP_STORAGE_DB: &str = "db";
 pub const PROP_STORAGE_CREATE_DB: &str = "create_db";
 pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
@@ -187,7 +187,7 @@ impl Volume for InfluxDbBackend {
     async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
         let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
-            None => bail!("influxdb backed storages need some volume-specific configuration"),
+            None => bail!("InfluxDB backed storages need some volume-specific configuration"),
         };
         let on_closure = match volume_cfg.get(PROP_STORAGE_ON_CLOSURE) {
             Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
@@ -212,7 +212,7 @@ impl Volume for InfluxDbBackend {
                 },
             ),
             None => (generate_db_name(), true),
-            _ => bail!(""),
+            Some(v) => bail!("Invalid value for ${PROP_STORAGE_DB} config property: ${v}"),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -468,8 +468,12 @@ impl Storage for InfluxDbStorage {
             InfluxTimestamp::Nanoseconds(influx_time),
             measurement.clone(),
         )
+        .add_tag("kind", "DEL")
         .add_field("timestamp", timestamp.to_string())
-        .add_tag("kind", "DEL");
+        .add_field("encoding_prefix", 0_u8)
+        .add_field("encoding_suffix", "")
+        .add_field("base64", false)
+        .add_field("value", "");
         debug!(
             "Mark measurement {} as deleted at time {}",
             measurement, influx_time

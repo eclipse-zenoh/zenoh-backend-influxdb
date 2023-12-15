@@ -174,7 +174,7 @@ InfluxDB-backed volumes need some configuration to work:
 
 - **`"password"`** (optional) : the admin user's password.
 
-Both `username` and `password` should be hidden behind a `private` gate, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
+Both `username` and `password` should be hidden behind a `private` object, as shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` object.
 
 
 #### for v2.x
@@ -182,7 +182,7 @@ Both `username` and `password` should be hidden behind a `private` gate, as show
 
 - **`"token"`** (optional) : the admin user's token. It will be used for creation and dropping of databases. In Influxdb2.x, you can use an ALL ACCESS token for this (https://docs.influxdata.com/influxdb/cloud/admin/tokens/#all-access-token)
 
-Both `org_id` and `token` should be hidden behind a `private` gate, like the "username" and "password" shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` gate.
+Both `org_id` and `token` should be hidden behind a `private` object, like the "username" and "password" shown in the example [above](#setup-via-a-json5-configuration-file). In general, if you wish for a part of the configuration to be hidden when configuration is queried, you should hide it behind a `private` object.
 -------------------------------
 ## Volume-specific storage configuration
 Storages relying on a `influxdb` backed volume may have additional configuration through the `volume` section:

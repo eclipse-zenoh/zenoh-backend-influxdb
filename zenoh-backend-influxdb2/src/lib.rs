@@ -23,7 +23,6 @@ use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
 
-use log::{debug, error, warn};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -46,8 +45,6 @@ use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
 pub const PROP_BACKEND_ORG_ID: &str = "org_id";
-
-pub const PROP_BACKEND_INFLUXDB_VERSION: &str = "influxdb_version";
 pub const PROP_TOKEN: &str = "token";
 
 // Properties used by the Storage
@@ -78,7 +75,8 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
         PrivacyGetResult::Public(serde_json::Value::String(v)) => {
             log::warn!(
-                r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
+                r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). 
+                You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
                 v,
                 credit,
                 credit,
@@ -94,7 +92,8 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
         } => {
             log::warn!(
                 r#"Value "{}" is given for `{}` publicly, but a private value also exists. 
-                The private value will be used, but the public value, which is {} the same as the private one, will still be visible in configurations."#,
+                The private value will be used, 
+                but the public value, which is {} the same as the private one, will still be visible in configurations."#,
                 public,
                 credit,
                 if public == private { "" } else { "not " }
@@ -112,12 +111,16 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
         get_private_conf(config, PROP_BACKEND_ORG_ID)?,
         get_private_conf(config, PROP_TOKEN)?,
     ) {
-        (Some(org_id), Some(token)) => Ok(Some(InfluxDbCredentials::Creds(
-            org_id.clone(),
-            token.clone(),
-        ))),
+        // (Some(org_id), Some(token)) => Ok(Some(InfluxDbCredentials::Creds(
+        //     org_id.clone(),
+        //     token.clone(),
+        // ))),
+        (Some(org_id), Some(token)) => Ok(Some(InfluxDbCredentials {
+            org_id: org_id.clone(),
+            token: token.clone(),
+        })),
         _ => {
-            error!("Couldn't get token and org");
+            log::error!("Couldn't get token and org");
             bail!(
                 "Properties `{}` and `{}` must exist",
                 PROP_BACKEND_ORG_ID,
@@ -132,7 +135,7 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     // For some reasons env_logger is sometime not active in a loaded library.
     // Try to activate it here, ignoring failures.
     let _ = env_logger::try_init();
-    debug!("InfluxDB backend {}", LONG_VERSION.as_str());
+    log::debug!("InfluxDBv2 backend {}", LONG_VERSION.as_str());
 
     config
         .rest
@@ -142,7 +145,7 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
         Some(serde_json::Value::String(url)) => url.clone(),
         _ => {
             bail!(
-                "Mandatory property `{}` for InfluxDb Backend must be a string",
+                "Mandatory property `{}` for InfluxDbv2 Backend must be a string",
                 PROP_BACKEND_URL
             )
         }
@@ -152,47 +155,40 @@ pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
     #[allow(unused_mut)]
     let mut admin_client: Client;
 
-    let credentials = extract_credentials(&config.rest)?;
-    match &credentials {
-        Some(InfluxDbCredentials::Creds(org_id, token)) => {
-            admin_client = Client::new(url.clone(), org_id.clone(), token); //what if it panics (the library unwraps this)
-
+    match extract_credentials(&config.rest)? {
+        Some(creds) => {
+            admin_client = match std::panic::catch_unwind(|| {
+                Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+            }) {
+                Ok(client) => client,
+                Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
+            };
             match async_std::task::block_on(async { admin_client.ready().await }) {
                 Ok(res) => {
                     if !res {
-                        bail!("Influxdb server is not ready! ")
+                        bail!("InfluxDBv2 server is not ready! ")
                     }
                 }
-                Err(e) => bail!("Failed to create InfluxDb Volume : {:?}", e),
+                Err(e) => bail!("Failed to create InfluxDBv2 Volume : {:?}", e),
             }
 
             Ok(Box::new(InfluxDbBackend {
                 admin_status: config,
                 admin_client,
-                credentials,
+                credentials: Some(creds),
             }))
         }
         None => {
             bail!("Admin creds not provided. Can't proceed without them.");
         }
     }
-
-    // Check connectivity to InfluxDB
-
-    //if everything above works, the volume is created here
 }
 
-// Enum to take care of different credential forms
-// Keep in mind that influx v1 allow access without credentials
+// Struct for credentials
 #[derive(Debug)]
-enum InfluxDbCredentials {
-    Creds(String, String),
-}
-
-//do we need influxdb_version or can we find that from the token/usr-psswd situation
-pub enum InfluxDbVersion {
-    VersionOne,
-    VersionTwo,
+struct InfluxDbCredentials {
+    org_id: String,
+    token: String,
 }
 
 pub struct InfluxDbBackend {
@@ -218,7 +214,7 @@ impl Volume for InfluxDbBackend {
     async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
         let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
-            None => bail!("influxdb backed storages need some volume-specific configuration"),
+            None => bail!("InfluxDBv2 backed storages need some volume-specific configuration"),
         };
 
         let on_closure = match volume_cfg.get(PROP_STORAGE_ON_CLOSURE) {
@@ -228,7 +224,7 @@ impl Volume for InfluxDbBackend {
             None => OnClosure::DoNothing,
             Some(_) => {
                 bail!(
-                    r#"`{}` property of storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
+                    r#"`{}` property of InfluxDBv2 storage `{}` must be one of "do_nothing" (default), "drop_db" and "drop_series""#,
                     PROP_STORAGE_ON_CLOSURE,
                     &config.name
                 )
@@ -244,7 +240,7 @@ impl Volume for InfluxDbBackend {
                 },
             ),
             None => (generate_db_name(), true),
-            _ => bail!("Couldn't create db"),
+            Some(v) => bail!("Invalid value for ${PROP_STORAGE_DB} config property: ${v}"),
         };
 
         // The Influx client on database used to write/query on this storage
@@ -252,31 +248,22 @@ impl Volume for InfluxDbBackend {
             Some(serde_json::Value::String(url)) => url.clone(),
             _ => {
                 bail!(
-                    "Mandatory property `{}` for InfluxDb Backend must be a string",
+                    "Mandatory property `{}` for InfluxDBv2 Backend must be a string",
                     PROP_BACKEND_URL
                 )
             }
         };
 
-        //   let url = get_url(self.admin_status.clone()).expect("url not found");
-        #[allow(unused_assignments)]
-        let mut org_id: String = String::new();
-        #[allow(unused_assignments)]
-        let mut token: String = String::new();
-
-        // Use token creds if specified in storage's volume config
-        // create user with token creds if user exists, if no token, then abort
-
-        let credentials = extract_credentials(volume_cfg)?;
-        match &credentials {
-            Some(InfluxDbCredentials::Creds(client_org, client_token)) => {
-                org_id = client_org.to_string();
-                token = client_token.to_string();
-            }
+        let creds = match extract_credentials(volume_cfg)? {
+            Some(creds) => creds,
             _ => bail!("No credentials specified to access database '{}'", db),
-        }
-        // let mut db_id: String = String::new();
-        let client = Client::new(url.clone(), org_id.clone(), token.clone()); //what if it panics (the library unwraps this)
+        };
+        let client = match std::panic::catch_unwind(|| {
+            Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+        }) {
+            Ok(client) => client,
+            Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
+        };
 
         //check if db exists, if it doesn't create one if user has set createdb=true in config
         match async_std::task::block_on(async { is_db_existing(&client, &db).await }) {
@@ -284,18 +271,18 @@ impl Volume for InfluxDbBackend {
                 if !res && createdb {
                     // try to create db using user credentials
                     match async_std::task::block_on(async {
-                        create_db(&self.admin_client, &org_id, &db).await
+                        create_db(&self.admin_client, &creds.org_id, &db).await
                     }) {
                         Ok(res) => {
                             if !res {
-                                bail!("Database '{}' wasnt't created in InfluxDb", db)
+                                bail!("Database '{}' wasnt't created in InfluxDBv2 storage", db)
                             }
                         }
-                        Err(e) => bail!("Failed to create InfluxDb Storage : {:?}", e),
+                        Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
                     }
                 }
             }
-            Err(e) => bail!("Failed to create InfluxDb Storage : {:?}", e),
+            Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
         }
 
         config
@@ -305,32 +292,18 @@ impl Volume for InfluxDbBackend {
             .entry(PROP_STORAGE_DB)
             .or_insert(db.clone().into());
 
-        //insert url and org_id in config
-        config
-            .volume_cfg
-            .as_object_mut()
-            .unwrap()
-            .entry(PROP_BACKEND_URL)
-            .or_insert(url.clone().into());
-
-        config
-            .volume_cfg
-            .as_object_mut()
-            .unwrap()
-            .entry(PROP_BACKEND_ORG_ID)
-            .or_insert(org_id.clone().into());
-
         // The Influx client on database with backend's credentials (admin), to drop measurements and database
-        let mut admin_org_id = String::new();
-        let mut admin_token = String::new();
-        match &self.credentials {
-            Some(InfluxDbCredentials::Creds(org_id, token)) => {
-                (admin_org_id, admin_token) = (org_id.clone(), token.clone());
-            }
-            None => {}
-        }
+        let admin_creds = match &self.credentials {
+            Some(creds) => creds,
+            None => bail!("No credentials specified to access database '{}'", db),
+        };
+        let admin_client = match std::panic::catch_unwind(|| {
+            Client::new(url.clone(), &admin_creds.org_id, &admin_creds.token)
+        }) {
+            Ok(client) => client,
+            Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
+        };
 
-        let admin_client = Client::new(url.clone(), admin_org_id, admin_token); //what if it panics (the library unwraps this)
         Ok(Box::new(InfluxDbStorage {
             config,
             admin_client,
@@ -382,47 +355,62 @@ struct InfluxDbStorage {
 }
 
 impl InfluxDbStorage {
-    /*
-                async fn get_deletion_timestamp(&self, measurement: &str) -> ZResult<Option<Timestamp>> {
-                    #[derive(Deserialize, Debug, PartialEq)]
-                    struct QueryResult {
-                        timestamp: String,
-                    }
+    async fn get_deletion_timestamp(&self, measurement: &str) -> ZResult<Option<Timestamp>> {
+        let db = get_db_name(self.config.clone())?;
+        let qs = format!(
+            "from(bucket: \"{}\")
+                                    |> range(start: {})
+                                    |> filter(fn: (r) => r._measurement == \"{}\")
+                                    |> filter(fn: (r) => r[\"kind\"] == \"DEL\")
+                                    |> last()
+                                ",
+            db, 0, measurement
+        );
 
-                    let query = InfluxRQuery::new(format!(
-                        r#"SELECT "timestamp" FROM "{measurement}" WHERE kind='DEL' ORDER BY time DESC LIMIT 1"#
-                    ));
-                    match self.client.json_query(query).await {
-                        Ok(mut result) => match result.deserialize_next::<QueryResult>() {
-                            Ok(qr) => {
-                                if !qr.series.is_empty() && !qr.series[0].values.is_empty() {
-                                    let ts = qr.series[0].values[0]
-                                        .timestamp
-                                        .parse::<Timestamp>()
-                                        .map_err(|err| {
-                                            zerror!(
-                                            "Failed to parse the latest timestamp for deletion of measurement {} : {}",
-                                            measurement, err.cause)
-                                        })?;
-                                    Ok(Some(ts))
-                                } else {
-                                    Ok(None)
-                                }
-                            }
-                            Err(err) => bail!(
-                                "Failed to get latest timestamp for deletion of measurement {} : {}",
-                                measurement,
-                                err
-                            ),
-                        },
-                        Err(err) => bail!(
-                            "Failed to get latest timestamp for deletion of measurement {} : {}",
-                            measurement,
-                            err
-                        ),
-                    }
-                }
-    */
+        // get the value and if it exists then extract the timestamp from it
+
+        #[derive(Debug, Default, FromDataPoint)]
+        struct ZenohPoint {
+            #[allow(dead_code)]
+            // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
+            kind: String,
+            timestamp: String,
+            encoding_prefix: i64, //should be u8 but not supported in v2.x so using a workaround
+            encoding_suffix: String,
+            base64: bool,
+            value: String,
+        }
+
+        let query = Query::new(qs);
+        let mut query_result: Vec<ZenohPoint> = vec![];
+
+        match async_std::task::block_on(async {
+            self.client.query::<ZenohPoint>(Some(query)).await
+        }) {
+            Ok(result) => {
+                query_result = result;
+            }
+            Err(e) => {
+                log::error!(
+                    "Couldn't get data from InfluxDBv2 database {} with error: {} ",
+                    db,
+                    e
+                );
+            }
+        };
+
+        if query_result.is_empty() {
+            return Ok(None);
+        }
+
+        match Timestamp::from_str(&query_result[0].timestamp) {
+            Ok(ts) => Ok(Some(ts)),
+            Err(e) => {
+                bail!("Couldn't parse the deletion timestamp {:?}", e)
+            }
+        }
+    }
+
     async fn schedule_measurement_drop(&self, measurement: &str) -> TimedHandle {
         let event = TimedEvent::once(
             Instant::now() + Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS),
@@ -462,6 +450,18 @@ impl Storage for InfluxDbStorage {
         timestamp: Timestamp,
     ) -> ZResult<StorageInsertionResult> {
         let measurement = key.unwrap_or_else(|| OwnedKeyExpr::from_str(NONE_KEY).unwrap());
+
+        if let Some(del_time) = self.get_deletion_timestamp(measurement.as_str()).await? {
+            // ignore sample if oldest than the deletion
+            if timestamp < del_time {
+                log::debug!(
+                    "Received a value for {:?} with timestamp older than its deletion in InfluxDBv2 database; ignore it",
+                    measurement
+                );
+                return Ok(StorageInsertionResult::Outdated);
+            }
+        }
+
         // Note: assume that uhlc timestamp was generated by a clock using UNIX_EPOCH (that's the case by default)
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
         let (base64, strvalue) = match String::from_utf8(value.payload.contiguous().into_owned()) {
@@ -469,30 +469,26 @@ impl Storage for InfluxDbStorage {
             Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
         };
 
-        let db = get_db_name(self.config.clone()).unwrap();
+        let db = get_db_name(self.config.clone())?;
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
         let zenoh_point = vec![DataPoint::builder(measurement.clone())
             .tag("kind", "PUT")
-            .tag("ztimestamp", timestamp.to_string())
-            .field(
-                "encoding_prefix",
-                u8::from(*value.encoding.prefix()).to_string(),
-            ) //issue with this data-type, converting it to string for now, will have to check later
+            .field("timestamp", timestamp.to_string())
+            .field("encoding_prefix", u8::from(*value.encoding.prefix()) as i64) //should be u8 but not supported in v2.x so using a workaround
             .field("encoding_suffix", value.encoding.suffix())
             .field("base64", base64)
             .field("value", strvalue)
-            .build()
-            .expect("error in building the write query")];
+            .build()?];
 
         match async_std::task::block_on(async {
             self.client.write(&db, stream::iter(zenoh_point)).await
         }) {
             Ok(_) => Ok(StorageInsertionResult::Inserted),
             Err(e) => bail!(
-                "Failed to put Value for {:?} in InfluxDb storage : {}",
+                "Failed to put Value for {:?} in InfluxDBv2 storage : {}",
                 measurement,
                 e
             ),
@@ -508,25 +504,28 @@ impl Storage for InfluxDbStorage {
         // Note: assume that uhlc timestamp was generated by a clock using UNIX_EPOCH (that's the case by default)
         // delete all points from the measurement that are older than this DELETE message
         // (in case more recent PUT have been recevived un-ordered)
-        // let query = InfluxRQuery::new(format!(
-        //     r#"DELETE FROM "{}" WHERE time < {}"#,
-        //     measurement, influx_time
-        // ));
-        let db = get_db_name(self.config.clone()).unwrap();
 
-        let start = NaiveDateTime::UNIX_EPOCH;
-        //  let deletion_time =        NaiveDateTime::from_timestamp_millis(timestamp.get_time().0.try_into().unwrap()).unwrap();
-        let curr_deletion_time = Utc::now().naive_utc();
-        let predicate = None; //can be specified as tag or field values
-        debug!("Delete {:?} with Influx query", measurement);
+        let db = get_db_name(self.config.clone())?;
 
+        let start_timestamp = NaiveDateTime::UNIX_EPOCH;
+        let stop_timestamp = NaiveDateTime::from_timestamp_opt(
+            timestamp.get_time().as_secs() as i64,
+            timestamp.get_time().subsec_nanos(),
+        )
+        .expect("Couldn't convert uhlc timestamp to naivedatetime");
+
+        let predicate = None; //can be specified with tag or field values
+        log::debug!(
+            "Delete {:?} with Influx query in InfluxDBv2 storage",
+            measurement
+        );
         if let Err(e) = self
             .client
-            .delete(&db, start, curr_deletion_time, predicate)
+            .delete(&db, start_timestamp, stop_timestamp, predicate)
             .await
         {
             bail!(
-                "Failed to delete points for measurement '{}' from InfluxDb storage : {}",
+                "Failed to delete points for measurement '{}' from InfluxDBv2 storage : {}",
                 measurement,
                 e
             )
@@ -535,24 +534,23 @@ impl Storage for InfluxDbStorage {
         // filling fields with dummy values
 
         let zenoh_point = vec![DataPoint::builder(measurement.clone())
-            .tag("kind", "DELETE")
-            .tag("ztimestamp", timestamp.to_string())
-            .field("encoding_prefix", "")
+            .tag("kind", "DEL")
+            .field("timestamp", timestamp.to_string())
+            .field("encoding_prefix", 0_i64) //should be u8 but not supported in v2.x so using a workaround
             .field("encoding_suffix", "")
             .field("base64", false)
             .field("value", "")
-            .build()
-            .expect("error in building the write query")];
+            .build()?];
 
-        debug!(
-            "Mark measurement {} as deleted at time {}",
+        log::debug!(
+            "Mark measurement {} as deleted at time {} in InfluxDBv2 storage",
             measurement.clone(),
-            curr_deletion_time
+            stop_timestamp
         );
 
         if let Err(e) = self.client.write(&db, stream::iter(zenoh_point)).await {
             bail!(
-                "Failed to mark measurement {:?} as deleted : {}",
+                "Failed to mark measurement {:?} as deleted : {} in InfluxDBv2 storage",
                 measurement,
                 e
             )
@@ -570,10 +568,10 @@ impl Storage for InfluxDbStorage {
     ) -> ZResult<Vec<StoredData>> {
         let measurement = match key.clone() {
             Some(k) => k,
-            None => OwnedKeyExpr::from_str(NONE_KEY).unwrap(),
+            None => OwnedKeyExpr::from_str(NONE_KEY)?,
         };
 
-        let db = get_db_name(self.config.clone()).unwrap();
+        let db = get_db_name(self.config.clone())?;
 
         // the expected JSon type resulting from the query
         // #[derive(Deserialize, Debug)]
@@ -582,15 +580,12 @@ impl Storage for InfluxDbStorage {
             #[allow(dead_code)]
             // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
             kind: String,
-            ztimestamp: String,
-            encoding_prefix: String, //should be u8 but not supported in v2.x so using a workaround
+            timestamp: String,
+            encoding_prefix: i64, //should be u8 but not supported in v2.x so using a workaround
             encoding_suffix: String,
             base64: bool,
             value: String,
         }
-
-        let stop_time = Utc::now().naive_utc();
-        let time_range = format!("-{}s", stop_time.timestamp());
         #[allow(unused_assignments)]
         let mut qs: String = String::new();
 
@@ -613,12 +608,16 @@ impl Storage for InfluxDbStorage {
                                             |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
                                             |> last()
                                         ",
-                    db, time_range, measurement
+                    db, 0, measurement
                 );
             }
         }
 
-        debug!("Get {:?} with Influx query:{}", key, qs);
+        log::debug!(
+            "Get {:?} with Influx query:{} in InfluxDBv2 storage",
+            key,
+            qs
+        );
 
         let query = Query::new(qs);
         let mut query_result: Vec<ZenohPoint> = vec![];
@@ -630,16 +629,21 @@ impl Storage for InfluxDbStorage {
                 query_result = result;
             }
             Err(e) => {
-                error!("Couldn't get data from database {} with error: {} ", db, e);
+                log::error!(
+                    "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
+                    db,
+                    e
+                );
             }
         };
         let mut result: Vec<StoredData> = vec![];
 
         for i in &query_result {
-            let ztimestamp = Timestamp::from_str(&i.ztimestamp).expect("didnt parse timestamp");
+            let ts = Timestamp::from_str(&i.timestamp)
+                .expect("Couldn't parse uhlc timestamp from GET query");
             result.push(StoredData {
                 value: i.value.clone().into(),
-                timestamp: ztimestamp,
+                timestamp: ts,
             });
         }
         Ok(result)
@@ -647,7 +651,7 @@ impl Storage for InfluxDbStorage {
 
     //putting a stub here to be implemented later
     async fn get_all_entries(&self) -> ZResult<Vec<(Option<OwnedKeyExpr>, Timestamp)>> {
-        warn!("called get_all_entries");
+        log::warn!("called get_all_entries in InfluxDBv2 storage");
         let mut result: Vec<(Option<OwnedKeyExpr>, Timestamp)> = Vec::new();
         let curr_time = zenoh::time::new_reception_timestamp();
         result.push((None, curr_time));
@@ -665,11 +669,11 @@ fn get_db_name(config: StorageConfig) -> ZResult<String> {
 
 impl Drop for InfluxDbStorage {
     fn drop(&mut self) {
-        debug!("Closing InfluxDB storage");
+        log::debug!("Closing InfluxDBv2 storage");
         let db = match self.config.volume_cfg.get(PROP_STORAGE_DB) {
             Some(serde_json::Value::String(s)) => s.to_string(),
             _ => {
-                error!("no db was found");
+                log::error!("no db was found");
                 return;
             }
         };
@@ -677,30 +681,31 @@ impl Drop for InfluxDbStorage {
         match self.on_closure {
             OnClosure::DropDb => {
                 task::block_on(async move {
-                    debug!("Close InfluxDB storage, dropping database {}", db);
+                    log::debug!("Close InfluxDBv2 storage, dropping database {}", db);
                     if let Err(e) = self.admin_client.delete_bucket(&db).await {
-                        error!("Failed to drop InfluxDb database '{}' : {}", db, e)
+                        log::error!("Failed to drop InfluxDbv2 database '{}' : {}", db, e)
                     }
                 });
             }
             OnClosure::DropSeries => {
                 task::block_on(async move {
-                    debug!(
-                        "Close InfluxDB storage, dropping all series from database {}",
+                    log::debug!(
+                        "Close InfluxDBv2 storage, dropping all series from database {}",
                         db
                     );
                     let start = NaiveDateTime::MIN;
                     let stop = NaiveDateTime::MAX;
                     if let Err(e) = self.client.delete(&db, start, stop, None).await {
-                        error!(
-                            "Failed to drop all series from InfluxDb database '{}' : {}",
-                            db, e
+                        log::error!(
+                            "Failed to drop all series from InfluxDbv2 database '{}' : {}",
+                            db,
+                            e
                         )
                     }
                 });
             }
             OnClosure::DoNothing => {
-                debug!("Close InfluxDB storage, keeping database {} as it is", db);
+                log::debug!("Close InfluxDBv2 storage, keeping database {} as it is", db);
             }
         }
     }
@@ -739,9 +744,7 @@ async fn is_db_existing(client: &Client, db: &str) -> ZResult<bool> {
     }
 }
 
-//this should return the DB_ID
 async fn create_db(client: &Client, org_id: &str, db: &str) -> ZResult<bool> {
-    //let mut db_id: String = String::new();
     let result = client
         .create_bucket(Some(PostBucketRequest::new(
             org_id.to_owned(),
@@ -786,30 +789,30 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
     result
 }
 
-fn time_from_parameters(t: &str) -> ZResult<Option<(u64, u64)>> {
+fn time_from_parameters(t: &str) -> ZResult<Option<(f64, f64)>> {
     use zenoh::selector::{TimeBound, TimeRange};
     let time_range = t.time_range()?;
 
-    let mut start_time: u64 = 0;
-    let mut stop_time: u64 = Utc::now().naive_utc().timestamp().try_into().unwrap();
+    let mut start_time: f64 = 0_f64;
+    let mut stop_time: f64 = Utc::now().naive_utc().timestamp() as f64;
 
     match time_range {
         Some(TimeRange(start, stop)) => {
             match start {
                 TimeBound::Inclusive(t) => {
-                    start_time = calculate_time(t).unwrap();
+                    start_time = calculate_time(t)?;
                 }
                 TimeBound::Exclusive(t) => {
-                    start_time = calculate_time(t).unwrap();
+                    start_time = calculate_time(t)? + 1_f64;
                 }
                 TimeBound::Unbounded => {}
             }
             match stop {
                 TimeBound::Inclusive(t) => {
-                    stop_time = calculate_time(t).unwrap();
+                    stop_time = calculate_time(t)? + 1_f64;
                 }
                 TimeBound::Exclusive(t) => {
-                    stop_time = calculate_time(t).unwrap();
+                    stop_time = calculate_time(t)?;
                 }
                 TimeBound::Unbounded => {}
             }
@@ -821,17 +824,16 @@ fn time_from_parameters(t: &str) -> ZResult<Option<(u64, u64)>> {
     Ok(Some((start_time, stop_time)))
 }
 
-fn calculate_time(tx: TimeExpr) -> ZResult<u64> {
-    //Note: conversions bw f64,i64,u64
-    let now_time = Utc::now().naive_utc().timestamp();
+fn calculate_time(tx: TimeExpr) -> ZResult<f64> {
+    let now_time = Utc::now().naive_utc().timestamp() as f64;
     match tx {
         TimeExpr::Fixed(t) => {
-            let time_in_secs = t
+            let time_in_subsecs = t
                 .duration_since(UNIX_EPOCH)
                 .expect("Time went backwards")
-                .as_secs();
-            Ok(time_in_secs)
+                .as_secs_f64();
+            Ok(time_in_subsecs)
         }
-        TimeExpr::Now { offset_secs } => Ok((now_time + offset_secs as i64).try_into().unwrap()),
+        TimeExpr::Now { offset_secs } => Ok(now_time + offset_secs),
     }
 }
