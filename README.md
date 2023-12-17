@@ -105,12 +105,12 @@ You can setup storages either at zenoh router startup via a configuration file, 
                   //Required 
                   //InfluxDB credentials, with read/write privileges for the database
                   //the org_id value should be the same as for admin
-                    org_id: "organization ID",
+                   // org_id: "organization ID",
                     //this is a token with either:
                     //a.) Read-Write access to the existing DB named above in the config (case where db/bucket already exists)
                     //b.) Read-write access to ALL buckets in the organization so it can access the new bucket created by zenoh;
                                 //(case where a new db/bucket has to be created)
-                    token: "user access token" 
+                   // token: "user access token" 
                 }
               }
             }
@@ -297,21 +297,22 @@ built with the exact same Rust version than `zenohd`, and using for `zenoh` depe
 Otherwise, incompatibilities in memory mapping of shared types between `zenohd` and the library can lead to a `"SIGSEV"` crash.
 
 To know the Rust version you're `zenohd` has been built with, use the `--version` option.
-Example:
+
+### Example with a downloaded version:
 ```bash
 $ zenohd --version
-The zenoh router v0.6.0-beta.1 built with rustc 1.64.0 (a55dd71d5 2022-09-19)
+The zenoh router v0.10.0-rc built with rustc 1.72.0 (5680fa18f 2023-08-23)
 ```
-Here, `zenohd` has been built with the rustc version `1.64.0`.
-Install and use this toolchain with the following command:
+Here, `zenohd` is version `0.10.0-rc` has been built with the rustc version `1.72.0`.  
+Install and use this same toolchain with the following command:
 
 ```bash
-$ rustup default 1.64.0
+$ rustup default 1.72.0
 ```
 
-And `zenohd` version corresponds to an un-released commit with id `1f20c86`. Update the `zenoh` dependency in Cargo.lock with this command:
-```bash
-$ cargo update -p zenoh --precise 1f20c86
+And edit the update `Cargo.toml` file to make all the `zenoh` dependencies to use the same version number:
+```toml
+zenoh = { version = "0.10.0-rc", features = [ "unstable" ] }
 ```
 
 Then build the backend, you can specify which version you want to build (we are showing the example for v2):
@@ -323,5 +324,25 @@ You can build both the versions as well:
 $ cargo build --release --all-targets
 ```
 
+=======
+### Example with a version built from sources:
+```bash
+$ zenohd --version
+The zenoh router v0.11.0-dev-37-g9f7a37ee built with rustc 1.72.0 (5680fa18f 2023-08-23)
+```
+Here, `zenohd` version is `v0.11.0-dev-37-g9f7a37ee` where:
+- `v0.11.0-dev` means it's a development version for the future `v0.11.0` release
+- `-37`means there have been 37 commits since the tag `0.11.0-dev` marking the begining of developments for this future version
+- `-g9f7a37ee` indicates the commit number of sources: `9f7a37ee` (the `g` prefix just meaning "git" shall be ignored)  
 
+And it has been built with the rustc version `1.72.0`.  
+Install and use this same toolchain with the following command:
 
+```bash
+$ rustup default 1.72.0
+```
+
+And update all the `zenoh` dependencies in `Cargo.lock` to use the commit id:
+```bash
+$ cargo update -p zenoh --precise 9f7a37ee
+```
