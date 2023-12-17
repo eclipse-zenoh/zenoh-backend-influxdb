@@ -186,28 +186,14 @@ jobs:
         run: ${{ matrix.job.use-cross }} --release --target=${{ matrix.job.target }}
 
       - name: Debian package - zenoh-backend-influxdb-v1
-        if: contains(matrix.job.target, '-linux-gnu')
+        if: contains(matrix.job.target, '-linux-')
         run: cargo deb --no-build --target=${{ matrix.job.target }} -p zenoh-backend-influxdb-v1
 
       - name: Debian package - zenoh-backend-influxdb-v2
-        if: contains(matrix.job.target, '-linux-gnu')
+        if: contains(matrix.job.target, '-linux-')
         run: cargo deb --no-build --target=${{ matrix.job.target }} -p zenoh-backend-influxdb-v2
 
-##########
 
-      # - name: Build
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     use-cross: ${{ matrix.job.use-cross }}
-      #     command: build
-      #     args: --release --target=${{ matrix.job.target }}
-
-      # - name: Debian package  
-      #   if: contains(matrix.job.target, '-linux-gnu')
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     command: deb
-      #     args: --no-build --target=${{ matrix.job.target }}
 
       - name: Packaging
         id: package

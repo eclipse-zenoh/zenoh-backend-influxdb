@@ -317,7 +317,7 @@ zenoh = { version = "0.10.0-rc", features = [ "unstable" ] }
 
 Then build the backend, you can specify which version you want to build (we are showing the example for v2):
 ```bash
-$ cargo build --release --all-targets -p zenoh-backend-influxdb2
+$ cargo build --release --all-targets -p zenoh-backend-influxdb-v2
 ```
 You can build both the versions as well:
 ```bash
