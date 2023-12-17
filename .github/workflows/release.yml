@@ -180,8 +180,12 @@ jobs:
           rustup show
           rustup target add ${{ matrix.job.target }}
 
-      - name: Build
-        run: ${{ matrix.job.use-cross }} --release --target=${{ matrix.job.target }}
+      - name: Build zenoh-backend-influxdb-v1
+        run: ${{ matrix.job.use-cross }} --release --target=${{ matrix.job.target }} -p zenoh-backend-influxdb-v1
+      
+      
+      - name: Build zenoh-backend-influxdb-v2
+        run: ${{ matrix.job.use-cross }} --release --target=${{ matrix.job.target }} -p zenoh-backend-influxdb-v2
 
       - name: Debian package - zenoh-backend-influxdb-v1
         if: contains(matrix.job.target, '-linux-gnu')
