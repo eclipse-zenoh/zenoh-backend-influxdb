@@ -105,12 +105,12 @@ You can setup storages either at zenoh router startup via a configuration file, 
                   //Required 
                   //InfluxDB credentials, with read/write privileges for the database
                   //the org_id value should be the same as for admin
-                    org_id: "organization ID",
+                  //  org_id: "organization ID",
                     //this is a token with either:
                     //a.) Read-Write access to the existing DB named above in the config (case where db/bucket already exists)
                     //b.) Read-write access to ALL buckets in the organization so it can access the new bucket created by zenoh;
                                 //(case where a new db/bucket has to be created)
-                    token: "user access token" 
+                   // token: "user access token" 
                 }
               }
             }
