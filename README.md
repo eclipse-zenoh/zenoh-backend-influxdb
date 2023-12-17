@@ -324,7 +324,7 @@ You can build both the versions as well:
 $ cargo build --release --all-targets
 ```
 
-=======
+
 ### Example with a version built from sources:
 ```bash
 $ zenohd --version
