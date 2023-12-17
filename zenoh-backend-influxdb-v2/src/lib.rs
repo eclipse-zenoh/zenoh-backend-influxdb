@@ -455,7 +455,7 @@ impl Storage for InfluxDbStorage {
             // ignore sample if oldest than the deletion
             if timestamp < del_time {
                 log::debug!(
-                    "Received a value for {:?} with timestamp older than its deletion in InfluxDBv2 database; ignore it",
+                    "Received a value for {:?} with timestamp older than its deletion in InfluxDBv2 database; Ignore it",
                     measurement
                 );
                 return Ok(StorageInsertionResult::Outdated);
