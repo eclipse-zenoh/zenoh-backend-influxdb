@@ -29,7 +29,7 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
-:note: This supports InfluxDB 2.x.
+:note: This has partial support for InfluxDB 2.x.
 
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
@@ -225,6 +225,9 @@ On GET operations, by default the storage returns only the latest point for each
 This is to be coherent with other backends technologies that only store 1 value per-key.  
 If you want to get time-series as a result of a GET operation, you need to specify a time range via
 the `"_time"`argument in your [Selector](https://github.com/eclipse-zenoh/roadmap/tree/main/rfcs/ALL/Selectors).
+
+:note: Right now, wild chunks like * and ** works only for Influxdb 1.x.
+This is due to lack of support in Influxdb 2.x API for our approach.
 
 Examples of selectors:
 ```bash
