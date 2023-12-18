@@ -29,7 +29,7 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
-:note: This has partial support for InfluxDB 2.x.
+:note: This has full support for Influxdb 1.x and partial support for InfluxDB 2.x.
 
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
