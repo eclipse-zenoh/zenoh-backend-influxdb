@@ -54,4 +54,4 @@ zenoh-collections = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "
 zenoh-core = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "master" }
 zenoh-util = { git = "https://github.com/eclipse-zenoh/zenoh", branch = "master" }
 
-openssl = { version = "0.10", features = ["vendored"] }
+#openssl = { version = "0.10", features = ["vendored"] }
