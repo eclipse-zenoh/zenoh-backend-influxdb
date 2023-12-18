@@ -116,7 +116,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
   - Run the zenoh router, with write permissions to its admin space:  
     `zenohd --adminspace-permissions rw`
   - Add the "influxdb2" volume (the "zenoh_backend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
-    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb2`
+    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086/api/v2"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb2`
   - Add the "demo" storage using the "influxdb2" volume:
     `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"demo/example/**",volume:{id:"influxdb2",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
 
