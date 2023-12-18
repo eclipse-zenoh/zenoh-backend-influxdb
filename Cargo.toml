@@ -13,7 +13,8 @@
 #
 
 [workspace]
-members = ["zenoh-backend-influxdb-v1", "zenoh-backend-influxdb-v2"]
+members = ["v1", "v2"]
+resolver = "1"
 
 
 [workspace.package]
