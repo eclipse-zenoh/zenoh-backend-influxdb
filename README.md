@@ -58,9 +58,11 @@ You can setup storages either at zenoh router startup via a configuration file, 
             // configuration of a "influxdb" volume (the "zenoh_backend_influxdb" backend library will be loaded at startup)
             //this should be named influxdb for v1 and influxdb2 for v2
             influxdb: {
-              // URL to the InfluxDB service
+              // URL to the InfluxDB service. The example below is for plugin v1.x. For plugin 2.x, we need to append /api/v2/ to the url
               url: "http://localhost:8086",
               private: {
+
+                //For detailed explanation, see individual README files for v1 and v2
                 //For Influxdb v1.x:
                 // If needed: InfluxDB credentials, preferably admin for databases creation and drop
                   //username: "admin",
@@ -69,7 +71,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 //For Influxdb v2.x:
                 // If needed: InfluxDB credentials, preferably ALL-ACCESS for databases creation and drop
                 //if not ALL-ACCESS then atleast with authorization to create/delete buckets
-                //Note: this should not be left empty for the plugin to work; if you have no admin creds, you can copy the user creds instead
+                //Note: this should not be left empty; if you have no admin creds, you can copy the user creds instead
                  // org_id: "organization ID",
                 //  token: "access token"
 
@@ -164,7 +166,7 @@ Alternatively, you can test running both the zenoh router and the InfluxDB servi
 ## Volume configuration
 InfluxDB-backed volumes need some configuration to work:
 
-- **`"url"`** (**required**) : a URL to the InfluxDB service. Example: `http://localhost:8086`
+- **`"url"`** (**required**) : a URL to the InfluxDB service. Example for plugin v1: `http://localhost:8086`. For plugin v2, we need to append `/add/v2` to the url.
 
 #### admin levelcredentials:
 
@@ -232,13 +234,16 @@ Each **key/value** put into the storage will map to an InfluxDB
 On deletion of a key, all points with a timestamp before the deletion message are deleted.
 A point with `"kind"="DEL`" is inserted (to avoid re-insertion of points with an older timestamp in case of un-ordered messages).
 In influxdb 1.x, after a delay (5 seconds), the measurement corresponding to the deleted key is dropped if it still contains no points.
-In influxdb 2.x, dropping measurement is not supported
+In influxdb 2.x, dropping measurement is not supported.
 
 ### Behaviour on GET
 On GET operations, by default the storage returns only the latest point for each key/measurement.
 This is to be coherent with other backends technologies that only store 1 value per-key.
 If you want to get time-series as a result of a GET operation, you need to specify a time range via
 the `"_time"`argument in your [Selector](https://github.com/eclipse-zenoh/roadmap/tree/main/rfcs/ALL/Selectors).
+
+:note: Right now, wild chunks like * and ** works only for Influxdb 1.x.
+This is due to lack of support in Influxdb 2.x API for our approach.
 
 Examples of selectors:
 ```bash
@@ -273,13 +278,14 @@ Unzip it in the same directory than `zenohd` or to any directory where it can fi
 ### Linux Debian
 
 Add Eclipse Zenoh private repository to the sources list, and install the `zenoh-backend-influxdb` package:
+Example for v1:
 
 ```bash
 echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" | sudo tee -a /etc/apt/sources.list > /dev/null
 sudo apt update
-sudo apt install zenoh-backend-influxdb
+sudo apt install zenoh-backend-influxdb-v1
 ```
-
+See the specific plugin (v1/v2) README file for details.
 
 -------------------------------
 ## How to build it
@@ -315,7 +321,8 @@ And edit the update `Cargo.toml` file to make all the `zenoh` dependencies to us
 zenoh = { version = "0.10.0-rc", features = [ "unstable" ] }
 ```
 
-Then build the backend, you can specify which version you want to build (we are showing the example for v2):
+Then build the backend, you can specify which version you want to build (here we are showing the example for v2. See the specific plugin (v1/v2) README file for details.
+):
 ```bash
 $ cargo build --release --all-targets -p zenoh-backend-influxdb-v2
 ```

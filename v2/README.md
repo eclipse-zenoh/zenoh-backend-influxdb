@@ -29,7 +29,7 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Build "master" branch:** see [below](#How-to-build-it)
 
-:note: This supports InfluxDB 2.x.
+:note: This provides extensive support for InfluxDB 2.x.
 
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
@@ -61,7 +61,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
             //this should be named influxdb2 for v2
             influxdb2: {
               // URL to the InfluxDB service
-              url: "http://localhost:8086",
+              url: "http://localhost:8086/api/v2/",
               private: {
                 // If needed: InfluxDB credentials, preferably ALL-ACCESS for databases creation and drop
                 //if not ALL-ACCESS then atleast with authorization to create/delete buckets
@@ -72,7 +72,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
             }
           },
           storages: {
-            // configuration of a "demo" storage using the "influxdb" volume
+            // configuration of a "demo" storage using the "influxdb2" volume
             demo: {
               // the key expression this storage will subscribes to
               key_expr: "demo/example/**",
@@ -115,10 +115,10 @@ You can setup storages either at zenoh router startup via a configuration file, 
 
   - Run the zenoh router, with write permissions to its admin space:  
     `zenohd --adminspace-permissions rw`
-  - Add the "influxdb" volume (the "zenoh_backend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
-    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb`
-  - Add the "demo" storage using the "influxdb" volume:
-    `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"demo/example/**",volume:{id:"influxdb",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
+  - Add the "influxdb2" volume (the "zenoh_backend_fs" library will be loaded), connected to InfluxDB service on http://localhost:8086:
+    `curl -X PUT -H 'content-type:application/json' -d '{url:"http://localhost:8086/api/v2"}' http://localhost:8000/@/router/local/config/plugins/storage_manager/volumes/influxdb2`
+  - Add the "demo" storage using the "influxdb2" volume:
+    `curl -X PUT -H 'content-type:application/json' -d '{key_expr:"demo/example/**",volume:{id:"influxdb2",db:"zenoh_example",create_db:true}}' http://localhost:8000/@/router/local/config/plugins/storage_manager/storages/demo`
 
 ### **Tests using the REST API**
 
@@ -153,7 +153,7 @@ InfluxDB-backed volumes need some configuration to work:
 
 - **`"url"`** (**required**) : a URL to the InfluxDB service. Example: `http://localhost:8086`
 
-- **`"org_id"`** (optional) : an [InfluxDB admin](https://docs.influxdata.com/influxdb/v1.8/administration/authentication_and_authorization/#admin-users) user name.
+- **`"org_id"`** (optional) : an [InfluxDB organizations](https://docs.influxdata.com/influxdb/cloud/admin/organizations/) organization ID.
 
 - **`"token"`** (optional) : the admin user's token. It will be used for creation of databases, granting read/write privileges of databases mapped to storages and dropping of databases and measurements. In Influxdb2.x, you can use an ALL ACCESS token for this (https://docs.influxdata.com/influxdb/cloud/admin/tokens/#all-access-token)
 
@@ -171,7 +171,7 @@ Storages relying on a `influxdb2` backed volume may have additional configuratio
 - **`"on_closure"`** (optional, string) : the strategy to use when the Storage is removed. There are 3 options:
   - *unset* or `"do_nothing"`: the database remains untouched (this is the default behaviour)
   - `"drop_db"`: the database is dropped (i.e. removed)
-  - `"drop_series"`: all the series (measurements) are dropped and the database remains empty.
+  - `"drop_series"`: all the series (measurements) are dropped and the database remains empty. This is currently not supported in v2.
 
 - **`"org_id"`** (optional, string) :the user's organization. It should be same as the admin's organization.
 
@@ -204,6 +204,9 @@ On GET operations, by default the storage returns only the latest point for each
 This is to be coherent with other backends technologies that only store 1 value per-key.  
 If you want to get time-series as a result of a GET operation, you need to specify a time range via
 the `"_time"`argument in your [Selector](https://github.com/eclipse-zenoh/roadmap/tree/main/rfcs/ALL/Selectors).
+
+:note: Right now, wild chunks like * and ** do not work for Influxdb 2.x.
+This is due to lack of support in Influxdb 2.x API for our approach.
 
 Examples of selectors:
 ```bash
