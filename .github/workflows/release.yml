@@ -287,4 +287,5 @@ jobs:
         shell: bash
         run: |
           cargo login ${{ secrets.CRATES_IO_TOKEN }}
-          cargo publish
+          (cd v1 && cargo publish; cargo clean)
+          (cd v2 && cargo publish; cargo clean)
