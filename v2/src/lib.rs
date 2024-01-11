@@ -15,7 +15,7 @@
 use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
-use chrono::{NaiveDateTime, Utc};
+use chrono::{LocalResult, NaiveDateTime, SecondsFormat, TimeZone, Utc};
 use futures::prelude::*;
 use influxdb2::api::buckets::ListBucketsRequest;
 use influxdb2::models::Query;
@@ -597,7 +597,10 @@ impl Storage for InfluxDbStorage {
                                             |> filter(fn: (r) => r._measurement == \"{}\")
                                             |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
                                         ",
-                    db, start, stop, measurement
+                    db,
+                    unix_timestamp_to_rfc3339(start)?,
+                    unix_timestamp_to_rfc3339(stop)?,
+                    measurement
                 );
             }
             None => {
@@ -835,5 +838,15 @@ fn calculate_time(tx: TimeExpr) -> ZResult<f64> {
             Ok(time_in_subsecs)
         }
         TimeExpr::Now { offset_secs } => Ok(now_time + offset_secs),
+    }
+}
+
+fn unix_timestamp_to_rfc3339(timestamp: f64) -> ZResult<String> {
+    if let LocalResult::Single(datetime) =
+        Utc.timestamp_opt(timestamp as i64, (timestamp.fract() * 1e9) as u32)
+    {
+        Ok(datetime.to_rfc3339_opts(SecondsFormat::Nanos, true))
+    } else {
+        bail!("Could not convert timestamp {timestamp} to DateTime")
     }
 }
