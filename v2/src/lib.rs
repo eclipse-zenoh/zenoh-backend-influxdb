@@ -22,6 +22,7 @@ use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
+use zenoh_plugin_trait::{plugin_version, Plugin};
 
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
@@ -58,14 +59,9 @@ pub const NONE_KEY: &str = "@@none_key@@";
 // delay after deletion to drop a measurement
 const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 
-const GIT_VERSION: &str = git_version::git_version!(prefix = "v", cargo_prefix = "v");
 lazy_static::lazy_static!(
-    static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
     static ref INFLUX_REGEX_ALL: String = key_exprs_to_influx_regex(&["**".try_into().unwrap()]);
 );
-
-#[allow(dead_code)]
-const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
 type Config<'a> = &'a serde_json::Map<String, serde_json::Value>;
 
@@ -130,56 +126,67 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
     }
 }
 
-#[no_mangle]
-pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
-    // For some reasons env_logger is sometime not active in a loaded library.
-    // Try to activate it here, ignoring failures.
-    let _ = env_logger::try_init();
-    log::debug!("InfluxDBv2 backend {}", LONG_VERSION.as_str());
+pub struct InfluxDbBackend {}
+zenoh_plugin_trait::declare_plugin!(InfluxDbBackend);
 
-    config
-        .rest
-        .insert("version".into(), LONG_VERSION.clone().into());
+impl Plugin for InfluxDbBackend {
+    type StartArgs = VolumeConfig;
+    type Instance = VolumeInstance;
 
-    let url = match config.rest.get(PROP_BACKEND_URL) {
-        Some(serde_json::Value::String(url)) => url.clone(),
-        _ => {
-            bail!(
-                "Mandatory property `{}` for InfluxDbv2 Backend must be a string",
-                PROP_BACKEND_URL
-            )
-        }
-    };
+    const DEFAULT_NAME: &'static str = "influxdb_backend";
+    const PLUGIN_VERSION: &'static str = plugin_version!();
 
-    // The InfluxDB "admin" client that will be used for creating and dropping buckets (create/drop databases)
-    #[allow(unused_mut)]
-    let mut admin_client: Client;
+    fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
+        // For some reasons env_logger is sometime not active in a loaded library.
+        // Try to activate it here, ignoring failures.
+        let _ = env_logger::try_init();
+        log::debug!("InfluxDBv2 backend {}", Self::PLUGIN_VERSION);
 
-    match extract_credentials(&config.rest)? {
-        Some(creds) => {
-            admin_client = match std::panic::catch_unwind(|| {
-                Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
-            }) {
-                Ok(client) => client,
-                Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
-            };
-            match async_std::task::block_on(async { admin_client.ready().await }) {
-                Ok(res) => {
-                    if !res {
-                        bail!("InfluxDBv2 server is not ready! ")
-                    }
-                }
-                Err(e) => bail!("Failed to create InfluxDBv2 Volume : {:?}", e),
+        let mut config = config.clone();
+        config
+            .rest
+            .insert("version".into(), Self::PLUGIN_VERSION.into());
+
+        let url = match config.rest.get(PROP_BACKEND_URL) {
+            Some(serde_json::Value::String(url)) => url.clone(),
+            _ => {
+                bail!(
+                    "Mandatory property `{}` for InfluxDbv2 Backend must be a string",
+                    PROP_BACKEND_URL
+                )
             }
+        };
 
-            Ok(Box::new(InfluxDbBackend {
-                admin_status: config,
-                admin_client,
-                credentials: Some(creds),
-            }))
-        }
-        None => {
-            bail!("Admin creds not provided. Can't proceed without them.");
+        // The InfluxDB "admin" client that will be used for creating and dropping buckets (create/drop databases)
+        #[allow(unused_mut)]
+        let mut admin_client: Client;
+
+        match extract_credentials(&config.rest)? {
+            Some(creds) => {
+                admin_client = match std::panic::catch_unwind(|| {
+                    Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+                }) {
+                    Ok(client) => client,
+                    Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
+                };
+                match async_std::task::block_on(async { admin_client.ready().await }) {
+                    Ok(res) => {
+                        if !res {
+                            bail!("InfluxDBv2 server is not ready! ")
+                        }
+                    }
+                    Err(e) => bail!("Failed to create InfluxDBv2 Volume : {:?}", e),
+                }
+
+                Ok(Box::new(InfluxDbVolume {
+                    admin_status: config,
+                    admin_client,
+                    credentials: Some(creds),
+                }))
+            }
+            None => {
+                bail!("Admin creds not provided. Can't proceed without them.");
+            }
         }
     }
 }
@@ -191,14 +198,14 @@ struct InfluxDbCredentials {
     token: String,
 }
 
-pub struct InfluxDbBackend {
+pub struct InfluxDbVolume {
     admin_status: VolumeConfig,
     admin_client: Client,
     credentials: Option<InfluxDbCredentials>,
 }
 
 #[async_trait]
-impl Volume for InfluxDbBackend {
+impl Volume for InfluxDbVolume {
     fn get_admin_status(&self) -> serde_json::Value {
         self.admin_status.to_json_value()
     }
@@ -211,7 +218,7 @@ impl Volume for InfluxDbBackend {
         }
     }
 
-    async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
+    async fn create_storage(&self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
         let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
             None => bail!("InfluxDBv2 backed storages need some volume-specific configuration"),
