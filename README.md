@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/eclipse-zenoh/zenoh/master/zenoh-dragon.png" height="150">
+<img src="https://raw.githubusercontent.com/eclipse-zenoh/zenoh/main/zenoh-dragon.png" height="150">
 
 [![CI](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/workflows/CI/badge.svg)](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/actions?query=workflow%3A%22CI%22)
 [![Discussion](https://img.shields.io/badge/discussion-on%20github-blue)](https://github.com/eclipse-zenoh/roadmap/discussions)
@@ -27,11 +27,11 @@ Its library name (without OS specific prefix and extension) that zenoh will rely
 
 :point_right: **Install latest release:** see [below](#How-to-install-it)
 
-:point_right: **Build "master" branch:** see [below](#How-to-build-it)
+:point_right: **Build "main" branch:** see [below](#How-to-build-it)
 
 -------------------------------
 ## :warning: Documentation for previous 0.5 versions:
-The following documentation related to the version currently in development in "master" branch: 0.6.x.
+The following documentation related to the version currently in development in "main" branch: 0.6.x.
 
 For previous versions see the README and code of the corresponding tagged version:
  - [0.5.0-beta.9](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/tree/0.5.0-beta.9#readme)
@@ -152,7 +152,7 @@ curl -g 'http://localhost:8000/demo/example/test?_time=[..]'
 
 ### **Usage with `eclipse/zenoh` Docker image**
 Alternatively, you can test running both the zenoh router and the InfluxDB service in Docker containers:
- - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/master/docker-compose.yml) file
+ - Download the [docker-compose.yml](https://github.com/eclipse-zenoh/zenoh-backend-influxdb/blob/main/docker-compose.yml) file
  - In the same directory, create the `./zenoh_docker/lib` sub-directories and place the `libzenoh_backend_influxdb.so` library
    for `x86_64-unknown-linux-musl` target within.
  - Start the containers running
