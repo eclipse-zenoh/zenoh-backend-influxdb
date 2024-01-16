@@ -22,6 +22,8 @@ use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
+use log::warn;
+use zenoh::buffers::ZBuf;
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 use std::convert::{TryFrom, TryInto};
@@ -40,7 +42,7 @@ use zenoh_backend_traits::config::{
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_core::bail;
+use zenoh_core::{bail, zerror};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
 // Properties used by the Backend
@@ -646,13 +648,54 @@ impl Storage for InfluxDbStorage {
         };
         let mut result: Vec<StoredData> = vec![];
 
-        for i in &query_result {
-            let ts = Timestamp::from_str(&i.timestamp)
-                .expect("Couldn't parse uhlc timestamp from GET query");
-            result.push(StoredData {
-                value: i.value.clone().into(),
-                timestamp: ts,
-            });
+        for zpoint in query_result {
+            // get the encoding
+            let encoding_prefix =
+                (if zpoint.encoding_prefix >= 0 && zpoint.encoding_prefix <= 255 {
+                    Ok(zpoint.encoding_prefix as u8)
+                } else {
+                    Err(zerror!(
+                        "Encoding {} is outside possible range of values",
+                        zpoint.encoding_prefix
+                    ))
+                })
+                .and_then(|prefix| {
+                    KnownEncoding::try_from(prefix)
+                        .map_err(|_| zerror!("Unknown encoding {}", zpoint.encoding_prefix))
+                })?;
+            let encoding = if zpoint.encoding_suffix.is_empty() {
+                Encoding::Exact(encoding_prefix)
+            } else {
+                Encoding::WithSuffix(encoding_prefix, zpoint.encoding_suffix.into())
+            };
+            // get the payload
+            let payload = if zpoint.base64 {
+                match b64_std_engine.decode(zpoint.value) {
+                    Ok(v) => ZBuf::from(v),
+                    Err(e) => {
+                        warn!(
+                            r#"Failed to decode zenoh base64 Value from Influx point with timestamp="{}": {}"#,
+                            zpoint.timestamp, e
+                        );
+                        continue;
+                    }
+                }
+            } else {
+                ZBuf::from(zpoint.value.into_bytes())
+            };
+            // get the timestamp
+            let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
+                Ok(t) => t,
+                Err(e) => {
+                    warn!(
+                        r#"Failed to decode zenoh Timestamp from Influx point with timestamp="{}": {:?}"#,
+                        zpoint.timestamp, e
+                    );
+                    continue;
+                }
+            };
+            let value = Value::new(payload).encoding(encoding);
+            result.push(StoredData { value, timestamp });
         }
         Ok(result)
     }

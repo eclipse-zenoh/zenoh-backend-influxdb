@@ -27,9 +27,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 env_logger = { workspace = true }
 futures = "0.3.28"
 git-version = { workspace = true }
-influxdb2 = { version = "0.4.5", features = [
-    "rustls",
-], default-features = false }
+influxdb2 = { version = "0.4.5", features = ["rustls"], default-features = false }
 influxdb2-derive = "0.1.1"
 influxdb2-structmap = "0.2"
 lazy_static = { workspace = true }
@@ -55,4 +53,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
 license-file = ["../LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.11.0-dev)"
+depends = "zenoh-plugin-storage-manager (=0.11.0-dev-1)"
