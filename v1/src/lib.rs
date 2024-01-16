@@ -37,7 +37,7 @@ use zenoh_backend_traits::config::{
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
 use zenoh_core::{bail, zerror};
-use zenoh_plugin_trait::{plugin_version, Plugin};
+use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
 // Properties used by the Backend
@@ -108,6 +108,7 @@ impl Plugin for InfluxDbBackend {
 
     const DEFAULT_NAME: &'static str = "influxdb_backend";
     const PLUGIN_VERSION: &'static str = plugin_version!();
+    const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
         // For some reasons env_logger is sometime not active in a loaded library.

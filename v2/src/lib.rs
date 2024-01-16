@@ -22,7 +22,7 @@ use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
-use zenoh_plugin_trait::{plugin_version, Plugin};
+use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
@@ -135,6 +135,7 @@ impl Plugin for InfluxDbBackend {
 
     const DEFAULT_NAME: &'static str = "influxdb_backend";
     const PLUGIN_VERSION: &'static str = plugin_version!();
+    const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
         // For some reasons env_logger is sometime not active in a loaded library.
