@@ -15,20 +15,18 @@
 use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use futures::prelude::*;
 use influxdb2::api::buckets::ListBucketsRequest;
 use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
-use log::warn;
-use zenoh::buffers::ZBuf;
 
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 use zenoh::buffers::buffer::SplitBuffer;
 use zenoh::prelude::*;
@@ -41,7 +39,7 @@ use zenoh_backend_traits::config::{
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_core::{bail, zerror};
+use zenoh_core::bail;
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
 // Properties used by the Backend
@@ -588,29 +586,30 @@ impl Storage for InfluxDbStorage {
             base64: bool,
             value: String,
         }
+
         #[allow(unused_assignments)]
         let mut qs: String = String::new();
 
-        match time_from_parameters(parameters)? {
-            Some((start, stop)) => {
+        match timerange_from_parameters(parameters)? {
+            Some(range) => {
                 qs = format!(
                     "from(bucket: \"{}\")
-                                            |> range(start: {}, stop: {})
+                                            |> range({})
                                             |> filter(fn: (r) => r._measurement == \"{}\")
                                             |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
                                         ",
-                    db, start, stop, measurement
+                    db, range, measurement
                 );
             }
             None => {
                 qs = format!(
                     "from(bucket: \"{}\")
-                                            |> range(start: {})
+                                            |> range(start:0)
                                             |> filter(fn: (r) => r._measurement == \"{}\")
                                             |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
                                             |> last()
                                         ",
-                    db, 0, measurement
+                    db, measurement
                 );
             }
         }
@@ -640,54 +639,13 @@ impl Storage for InfluxDbStorage {
         };
         let mut result: Vec<StoredData> = vec![];
 
-        for zpoint in query_result {
-            // get the encoding
-            let encoding_prefix =
-                (if zpoint.encoding_prefix >= 0 && zpoint.encoding_prefix <= 255 {
-                    Ok(zpoint.encoding_prefix as u8)
-                } else {
-                    Err(zerror!(
-                        "Encoding {} is outside possible range of values",
-                        zpoint.encoding_prefix
-                    ))
-                })
-                .and_then(|prefix| {
-                    KnownEncoding::try_from(prefix)
-                        .map_err(|_| zerror!("Unknown encoding {}", zpoint.encoding_prefix))
-                })?;
-            let encoding = if zpoint.encoding_suffix.is_empty() {
-                Encoding::Exact(encoding_prefix)
-            } else {
-                Encoding::WithSuffix(encoding_prefix, zpoint.encoding_suffix.into())
-            };
-            // get the payload
-            let payload = if zpoint.base64 {
-                match b64_std_engine.decode(zpoint.value) {
-                    Ok(v) => ZBuf::from(v),
-                    Err(e) => {
-                        warn!(
-                            r#"Failed to decode zenoh base64 Value from Influx point with timestamp="{}": {}"#,
-                            zpoint.timestamp, e
-                        );
-                        continue;
-                    }
-                }
-            } else {
-                ZBuf::from(zpoint.value.into_bytes())
-            };
-            // get the timestamp
-            let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
-                Ok(t) => t,
-                Err(e) => {
-                    warn!(
-                        r#"Failed to decode zenoh Timestamp from Influx point with timestamp="{}": {:?}"#,
-                        zpoint.timestamp, e
-                    );
-                    continue;
-                }
-            };
-            let value = Value::new(payload).encoding(encoding);
-            result.push(StoredData { value, timestamp });
+        for i in &query_result {
+            let ts = Timestamp::from_str(&i.timestamp)
+                .expect("Couldn't parse uhlc timestamp from GET query");
+            result.push(StoredData {
+                value: i.value.clone().into(),
+                timestamp: ts,
+            });
         }
         Ok(result)
     }
@@ -832,51 +790,54 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
     result
 }
 
-fn time_from_parameters(t: &str) -> ZResult<Option<(f64, f64)>> {
+fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
     use zenoh::selector::{TimeBound, TimeRange};
-    let time_range = t.time_range()?;
-
-    let mut start_time: f64 = 0_f64;
-    let mut stop_time: f64 = Utc::now().naive_utc().timestamp() as f64;
-
+    let time_range = p.time_range()?;
+    let mut result = String::new();
     match time_range {
         Some(TimeRange(start, stop)) => {
             match start {
                 TimeBound::Inclusive(t) => {
-                    start_time = calculate_time(t)?;
+                    result.push_str("start:");
+                    write_timeexpr(&mut result, t, 0);
                 }
                 TimeBound::Exclusive(t) => {
-                    start_time = calculate_time(t)? + 1_f64;
+                    result.push_str("start:");
+                    write_timeexpr(&mut result, t, 1);
                 }
                 TimeBound::Unbounded => {}
             }
             match stop {
                 TimeBound::Inclusive(t) => {
-                    stop_time = calculate_time(t)? + 1_f64;
+                    result.push_str(", stop:");
+                    write_timeexpr(&mut result, t, 1);
                 }
                 TimeBound::Exclusive(t) => {
-                    stop_time = calculate_time(t)?;
+                    result.push_str(", stop:");
+                    write_timeexpr(&mut result, t, 0);
                 }
                 TimeBound::Unbounded => {}
             }
         }
-        None => {
-            return Ok(None);
-        }
+        None => return Ok(None),
     }
-    Ok(Some((start_time, stop_time)))
+
+    Ok(Some(result))
 }
 
-fn calculate_time(tx: TimeExpr) -> ZResult<f64> {
-    let now_time = Utc::now().naive_utc().timestamp() as f64;
-    match tx {
+fn write_timeexpr(s: &mut String, t: TimeExpr, i: u64) {
+    use humantime::format_rfc3339_nanos;
+    use std::fmt::Write;
+    match t {
         TimeExpr::Fixed(t) => {
-            let time_in_subsecs = t
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs_f64();
-            Ok(time_in_subsecs)
+            let tm = t + Duration::from_millis(i * 10); //adding 10ms for timebound
+
+            write!(s, "{}", format_rfc3339_nanos(tm))
         }
-        TimeExpr::Now { offset_secs } => Ok(now_time + offset_secs),
+        TimeExpr::Now { offset_secs } => {
+            let os = offset_secs * 1e9 + (i * 10000000) as f64; //adding 10ms for timebound
+            write!(s, "{}ns", os)
+        }
     }
+    .unwrap()
 }
