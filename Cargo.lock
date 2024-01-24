@@ -4049,7 +4049,6 @@ dependencies = [
  "env_logger",
  "futures",
  "git-version",
- "humantime",
  "influxdb2",
  "influxdb2-derive",
  "influxdb2-structmap",
