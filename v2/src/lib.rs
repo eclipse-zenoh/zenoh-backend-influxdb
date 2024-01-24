@@ -876,16 +876,22 @@ fn write_timeexpr(s: &mut String, t: TimeExpr, i: u64) {
     use std::fmt::Write;
     match t {
         TimeExpr::Fixed(t) => {
-            let tm = t + Duration::from_nanos(i); //adding 1ns for inclusive timebinding
-            let td = tm.duration_since(UNIX_EPOCH).expect("Time went backwards");
-            let dt = chrono::DateTime::from_timestamp(
-                td.as_secs()
+            // let tm = t +
+            let time_duration = t.duration_since(UNIX_EPOCH).expect("Time went backwards")
+                + Duration::from_nanos(i); //adding 1ns for inclusive timebinding ;
+            let datetime = chrono::DateTime::from_timestamp(
+                time_duration
+                    .as_secs()
                     .try_into()
-                    .expect("error in converting seconds from u64 to i64"),
-                td.subsec_nanos(),
+                    .expect("Error in converting seconds from u64 to i64"),
+                time_duration.subsec_nanos(),
             )
-            .expect("error converting duration to datetime");
-            write!(s, "{}", dt.to_rfc3339_opts(SecondsFormat::Nanos, true))
+            .expect("Error in converting duration to datetime");
+            write!(
+                s,
+                "{}",
+                datetime.to_rfc3339_opts(SecondsFormat::Nanos, true)
+            )
         }
         TimeExpr::Now { offset_secs } => {
             let os = offset_secs * 1e9 + i as f64; //adding 1ns for inclusive timebinding
