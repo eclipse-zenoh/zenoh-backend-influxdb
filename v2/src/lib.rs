@@ -135,7 +135,7 @@ impl Plugin for InfluxDbBackend {
     type StartArgs = VolumeConfig;
     type Instance = VolumeInstance;
 
-    const DEFAULT_NAME: &'static str = "influxdb_backend";
+    const DEFAULT_NAME: &'static str = "influxdb_backend2";
     const PLUGIN_VERSION: &'static str = plugin_version!();
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
