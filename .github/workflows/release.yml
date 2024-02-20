@@ -20,6 +20,10 @@ on:
     - cron: "0 1 * * 1-5"
   workflow_dispatch:
 
+env:
+  VERSION_CROSS: 0.2.4
+  VERSION_CARGO_DEB: 1.44.1
+
 jobs:
   checks:
     name: Code checks
@@ -90,7 +94,12 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-gnu, arch: amd64, os: ubuntu-20.04, build-cmd: "cargo" }
+          - {
+              target: x86_64-unknown-linux-gnu,
+              arch: amd64,
+              os: ubuntu-20.04,
+              build-cmd: "cargo",
+            }
           - {
               target: x86_64-unknown-linux-musl,
               arch: amd64,
@@ -121,10 +130,30 @@ jobs:
               os: ubuntu-20.04,
               build-cmd: "cross",
             }
-          - { target: x86_64-apple-darwin, arch: darwin, os: macos-latest, build-cmd: "cargo" }
-          - { target: aarch64-apple-darwin, arch: darwin, os: macos-latest, build-cmd: "cargo" }
-          - { target: x86_64-pc-windows-msvc, arch: win64, os: windows-2019, build-cmd: "cargo" }
-          - { target: x86_64-pc-windows-gnu, arch: win64, os: windows-2019, build-cmd: "cargo" }
+          - {
+              target: x86_64-apple-darwin,
+              arch: darwin,
+              os: macos-latest,
+              build-cmd: "cargo",
+            }
+          - {
+              target: aarch64-apple-darwin,
+              arch: darwin,
+              os: macos-latest,
+              build-cmd: "cargo",
+            }
+          - {
+              target: x86_64-pc-windows-msvc,
+              arch: win64,
+              os: windows-2019,
+              build-cmd: "cargo",
+            }
+          - {
+              target: x86_64-pc-windows-gnu,
+              arch: win64,
+              os: windows-2019,
+              build-cmd: "cargo",
+            }
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -140,7 +169,7 @@ jobs:
         run: |
           case ${{ matrix.job.target }} in
             *-linux-gnu*)
-              cargo install cargo-deb
+              cargo install --version ${{ env.VERSION_CARGO_DEB }} cargo-deb
               ;;
           esac
 
@@ -159,7 +188,7 @@ jobs:
               ;;
           esac
 
-          cargo install cross --git https://github.com/cross-rs/cross
+          cargo install --version ${{ env.VERSION_CROSS }} cargo-cross
 
       - name: Windows > Install LLVM and Clang # required for bindgen to work, see https://github.com/rust-lang/rust-bindgen/issues/1797
         uses: KyleMayes/install-llvm-action@v1
