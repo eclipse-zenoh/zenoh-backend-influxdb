@@ -37,6 +37,7 @@ use zenoh_backend_traits::config::{
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
 use zenoh_core::{bail, zerror};
+use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
 
 // Properties used by the Backend
@@ -57,14 +58,9 @@ pub const NONE_KEY: &str = "@@none_key@@";
 // delay after deletion to drop a measurement
 const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 
-const GIT_VERSION: &str = git_version::git_version!(prefix = "v", cargo_prefix = "v");
 lazy_static::lazy_static!(
-    static ref LONG_VERSION: String = format!("{} built with {}", GIT_VERSION, env!("RUSTC_VERSION"));
     static ref INFLUX_REGEX_ALL: String = key_exprs_to_influx_regex(&["**".try_into().unwrap()]);
 );
-
-#[allow(dead_code)]
-const CREATE_BACKEND_TYPECHECK: CreateVolume = create_volume;
 
 fn get_private_conf<'a>(
     config: &'a serde_json::Map<String, serde_json::Value>,
@@ -103,75 +99,87 @@ fn get_private_conf<'a>(
     }
 }
 
-#[no_mangle]
-pub fn create_volume(mut config: VolumeConfig) -> ZResult<Box<dyn Volume>> {
-    // For some reasons env_logger is sometime not active in a loaded library.
-    // Try to activate it here, ignoring failures.
-    let _ = env_logger::try_init();
-    debug!("InfluxDB backend {}", LONG_VERSION.as_str());
+pub struct InfluxDbBackend {}
+zenoh_plugin_trait::declare_plugin!(InfluxDbBackend);
 
-    config
-        .rest
-        .insert("version".into(), LONG_VERSION.clone().into());
+impl Plugin for InfluxDbBackend {
+    type StartArgs = VolumeConfig;
+    type Instance = VolumeInstance;
 
-    let url = match config.rest.get(PROP_BACKEND_URL) {
-        Some(serde_json::Value::String(url)) => url.clone(),
-        _ => {
-            bail!(
-                "Mandatory property `{}` for InfluxDb Backend must be a string",
-                PROP_BACKEND_URL
-            )
-        }
-    };
+    const DEFAULT_NAME: &'static str = "influxdb_backend";
+    const PLUGIN_VERSION: &'static str = plugin_version!();
+    const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
-    // The InfluxDB client used for administration purposes (show/create/drop databases)
-    let mut admin_client = Client::new(url, "");
+    fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
+        // For some reasons env_logger is sometime not active in a loaded library.
+        // Try to activate it here, ignoring failures.
+        let _ = env_logger::try_init();
+        debug!("InfluxDB backend {}", Self::PLUGIN_VERSION);
 
-    // Note: remove username/password from properties to not re-expose them in admin_status
-    let credentials = match (
-        get_private_conf(&config.rest, PROP_BACKEND_USERNAME)?,
-        get_private_conf(&config.rest, PROP_BACKEND_PASSWORD)?,
-    ) {
-        (Some(username), Some(password)) => {
-            admin_client = admin_client.with_auth(username, password);
-            Some((username.clone(), password.clone()))
-        }
-        (None, None) => None,
-        _ => {
-            bail!(
-                "Optional properties `{}` and `{}` must coexist",
-                PROP_BACKEND_USERNAME,
-                PROP_BACKEND_PASSWORD
-            )
-        }
-    };
+        let mut config = config.clone();
+        config
+            .rest
+            .insert("version".into(), Self::PLUGIN_VERSION.into());
 
-    // Check connectivity to InfluxDB, trying to list databases
-    match async_std::task::block_on(async { show_databases(&admin_client).await }) {
-        Ok(dbs) => {
-            // trick: if "_internal" db is not shown, it means the credentials are not for an admin
-            if !dbs.iter().any(|e| e == "_internal") {
-                warn!("The InfluxDB credentials are not for an admin user; the volume won't be able to create or drop any database")
+        let url = match config.rest.get(PROP_BACKEND_URL) {
+            Some(serde_json::Value::String(url)) => url.clone(),
+            _ => {
+                bail!(
+                    "Mandatory property `{}` for InfluxDb Backend must be a string",
+                    PROP_BACKEND_URL
+                )
             }
-        }
-        Err(e) => bail!("Failed to create InfluxDb Volume : {}", e),
-    }
+        };
 
-    Ok(Box::new(InfluxDbBackend {
-        admin_status: config,
-        admin_client,
-        credentials,
-    }))
+        // The InfluxDB client used for administration purposes (show/create/drop databases)
+        let mut admin_client = Client::new(url, "");
+
+        // Note: remove username/password from properties to not re-expose them in admin_status
+        let credentials = match (
+            get_private_conf(&config.rest, PROP_BACKEND_USERNAME)?,
+            get_private_conf(&config.rest, PROP_BACKEND_PASSWORD)?,
+        ) {
+            (Some(username), Some(password)) => {
+                admin_client = admin_client.with_auth(username, password);
+                Some((username.clone(), password.clone()))
+            }
+            (None, None) => None,
+            _ => {
+                bail!(
+                    "Optional properties `{}` and `{}` must coexist",
+                    PROP_BACKEND_USERNAME,
+                    PROP_BACKEND_PASSWORD
+                )
+            }
+        };
+
+        // Check connectivity to InfluxDB, trying to list databases
+        match async_std::task::block_on(async { show_databases(&admin_client).await }) {
+            Ok(dbs) => {
+                // trick: if "_internal" db is not shown, it means the credentials are not for an admin
+                if !dbs.iter().any(|e| e == "_internal") {
+                    warn!("The InfluxDB credentials are not for an admin user; the volume won't be able to create or drop any database")
+                }
+            }
+            Err(e) => bail!("Failed to create InfluxDb Volume : {}", e),
+        }
+
+        Ok(Box::new(InfluxDbVolume {
+            admin_status: config,
+            admin_client,
+            credentials,
+        }))
+    }
 }
 
-pub struct InfluxDbBackend {
+pub struct InfluxDbVolume {
     admin_status: VolumeConfig,
     admin_client: Client,
     credentials: Option<(String, String)>,
 }
 
 #[async_trait]
-impl Volume for InfluxDbBackend {
+impl Volume for InfluxDbVolume {
     fn get_admin_status(&self) -> serde_json::Value {
         self.admin_status.to_json_value()
     }
@@ -184,7 +192,7 @@ impl Volume for InfluxDbBackend {
         }
     }
 
-    async fn create_storage(&mut self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
+    async fn create_storage(&self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
         let volume_cfg = match config.volume_cfg.as_object() {
             Some(v) => v,
             None => bail!("InfluxDB backed storages need some volume-specific configuration"),
