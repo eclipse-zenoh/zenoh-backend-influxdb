@@ -1,58 +1,107 @@
 [package]
 name = "zenoh-backend-influxdb-v2"
-version.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
-categories.workspace = true
 description = "Backend for Zenoh using InfluxDB v2.x"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.version]
+workspace = true
 
-[lib]
-name = "zenoh_backend_influxdb2"
-crate-type = ["cdylib", "rlib"]
+[package.repository]
+workspace = true
 
-[features]
-stats = ["zenoh/stats"]
+[package.homepage]
+workspace = true
 
+[package.authors]
+workspace = true
 
-[dependencies]
-async-std = { workspace = true }
-async-trait = { workspace = true }
-base64 = { workspace = true }
-chrono = { version = "0.4.31", features = ["serde"] }
-env_logger = { workspace = true }
-futures = "0.3.28"
-git-version = { workspace = true }
-influxdb2 = { version = "0.4.5", features = [
-    "rustls",
-], default-features = false }
-influxdb2-derive = "0.1.1"
-influxdb2-structmap = "0.2"
-lazy_static = { workspace = true }
-log = { workspace = true }
-num-traits = "0.2"
-rand = "0.8.5"
-serde = { workspace = true }
-serde_json = { workspace = true }
-uuid = { workspace = true }
-zenoh = { workspace = true }
-zenoh_backend_traits = { workspace = true }
-zenoh-collections = { workspace = true }
-zenoh-core = { workspace = true }
-zenoh-util = { workspace = true }
-zenoh-plugin-trait = { workspace = true }
+[package.edition]
+workspace = true
 
-[build-dependencies]
-rustc_version = "0.4.0"
+[package.license]
+workspace = true
 
+[package.categories]
+workspace = true
+
+[package.metadata]
 [package.metadata.deb]
 name = "zenoh-backend-influxdb-v2"
 maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
-license-file = ["../LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.11.0-dev-1)"
+license-file = [ "../LICENSE", "0" ]
+depends = "zenoh-plugin-storage-manager (=0.11.0-dev-66-gf96ef72)"
+
+[lib]
+name = "zenoh_backend_influxdb2"
+crate-type = [ "cdylib", "rlib" ]
+
+[features]
+stats = [ "zenoh/stats" ]
+
+[dependencies]
+futures = "0.3.28"
+influxdb2-derive = "0.1.1"
+influxdb2-structmap = "0.2"
+num-traits = "0.2"
+rand = "0.8.5"
+
+[dependencies.async-std]
+workspace = true
+
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.base64]
+workspace = true
+
+[dependencies.chrono]
+version = "0.4.31"
+features = [ "serde" ]
+
+[dependencies.env_logger]
+workspace = true
+
+[dependencies.git-version]
+workspace = true
+
+[dependencies.influxdb2]
+version = "0.4.5"
+features = [ "rustls" ]
+default-features = false
+
+[dependencies.lazy_static]
+workspace = true
+
+[dependencies.log]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.uuid]
+workspace = true
+
+[dependencies.zenoh]
+workspace = true
+
+[dependencies.zenoh_backend_traits]
+workspace = true
+
+[dependencies.zenoh-collections]
+workspace = true
+
+[dependencies.zenoh-core]
+workspace = true
+
+[dependencies.zenoh-util]
+workspace = true
+
+[dependencies.zenoh-plugin-trait]
+workspace = true
+
+[build-dependencies]
+rustc_version = "0.4.0"
