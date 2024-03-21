@@ -1,51 +1,99 @@
 [package]
 name = "zenoh-backend-influxdb-v1"
-version.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
-categories.workspace = true
 description = "Backend for Zenoh using InfluxDB v1.x"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.version]
+workspace = true
 
-[lib]
-name = "zenoh_backend_influxdb"
-crate-type = ["cdylib", "rlib"]
+[package.repository]
+workspace = true
 
-[features]
-stats = ["zenoh/stats"]
+[package.homepage]
+workspace = true
 
+[package.authors]
+workspace = true
 
-[dependencies]
-async-std = { workspace = true }
-async-trait = { workspace = true }
-base64 = { workspace = true }
-env_logger = { workspace = true }
-git-version = { workspace = true }
-humantime = "2.1.0"
-influxdb = { version = "0.7.1", default-features = false, features = ["derive", "use-serde", "h1-client-rustls"] }
-lazy_static = { workspace = true }
-log = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-uuid = { workspace = true }
-zenoh = { workspace = true }
-zenoh_backend_traits = { workspace = true }
-zenoh-collections = { workspace = true }
-zenoh-core = { workspace = true }
-zenoh-util = { workspace = true }
-zenoh-plugin-trait = { workspace = true }
+[package.edition]
+workspace = true
 
-[build-dependencies]
-rustc_version = "0.4.0"
+[package.license]
+workspace = true
 
+[package.categories]
+workspace = true
+
+[package.metadata]
 [package.metadata.deb]
 name = "zenoh-backend-influxdb-v1"
 maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
-license-file = ["../LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.11.0-dev-1)"
+license-file = [ "../LICENSE", "0" ]
+depends = "zenoh-plugin-storage-manager (=0.11.0-dev-70-g9b473b7)"
+
+[lib]
+name = "zenoh_backend_influxdb"
+crate-type = [ "cdylib", "rlib" ]
+
+[features]
+stats = [ "zenoh/stats" ]
+
+[dependencies]
+humantime = "2.1.0"
+
+[dependencies.async-std]
+workspace = true
+
+[dependencies.async-trait]
+workspace = true
+
+[dependencies.base64]
+workspace = true
+
+[dependencies.env_logger]
+workspace = true
+
+[dependencies.git-version]
+workspace = true
+
+[dependencies.influxdb]
+version = "0.7.1"
+default-features = false
+features = [ "derive", "use-serde", "h1-client-rustls" ]
+
+[dependencies.lazy_static]
+workspace = true
+
+[dependencies.log]
+workspace = true
+
+[dependencies.serde]
+workspace = true
+
+[dependencies.serde_json]
+workspace = true
+
+[dependencies.uuid]
+workspace = true
+
+[dependencies.zenoh]
+workspace = true
+
+[dependencies.zenoh_backend_traits]
+workspace = true
+
+[dependencies.zenoh-collections]
+workspace = true
+
+[dependencies.zenoh-core]
+workspace = true
+
+[dependencies.zenoh-util]
+workspace = true
+
+[dependencies.zenoh-plugin-trait]
+workspace = true
+
+[build-dependencies]
+rustc_version = "0.4.0"
