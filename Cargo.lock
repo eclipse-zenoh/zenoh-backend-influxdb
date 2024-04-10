@@ -3888,7 +3888,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v1"
-version = "0.11.0-dev"
+version = "0.11.0-dev-85-g2c765eb"
 dependencies = [
  "async-std",
  "async-trait",
@@ -3913,7 +3913,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v2"
-version = "0.11.0-dev"
+version = "0.11.0-dev-85-g2c765eb"
 dependencies = [
  "async-std",
  "async-trait",
