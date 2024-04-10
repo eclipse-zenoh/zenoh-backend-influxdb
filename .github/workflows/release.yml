@@ -63,8 +63,8 @@ jobs:
       version: ${{ needs.tag.outputs.version }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
     secrets: inherit
 
   cargo:
@@ -108,7 +108,7 @@ jobs:
       version: ${{ needs.tag.outputs.version }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.dylib$
+        ^libzenoh_backend_influxdb(2)?\.dylib$
       formulae: |
         zenoh-backend-influxdb
     secrets: inherit
@@ -124,8 +124,8 @@ jobs:
       repo: ${{ github.repository }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
       name: zenoh-backend-influxdb
     secrets: inherit
 
@@ -140,6 +140,6 @@ jobs:
       repo: ${{ github.repository }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
     secrets: inherit
