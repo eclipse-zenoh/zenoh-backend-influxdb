@@ -110,7 +110,8 @@ jobs:
       artifact-patterns: |
         ^libzenoh_backend_influxdb(2)?\.dylib$
       formulae: |
-        zenoh-backend-influxdb
+        zenoh-backend-influxdb-v1
+        zenoh-backend-influxdb-v2
     secrets: inherit
 
   eclipse:
