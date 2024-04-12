@@ -111,7 +111,7 @@ impl Plugin for InfluxDbBackend {
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
-        zenoh_util::init_log();
+        zenoh_util::init_log_from_env();
 
         debug!("InfluxDB backend {}", Self::PLUGIN_VERSION);
 
