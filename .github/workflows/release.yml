@@ -20,27 +20,28 @@ on:
     inputs:
       live-run:
         type: boolean
-        description: If false (or undefined) the workflow runs in dry-run mode (i.e. with no side-effects)
+        description: Live-run
         required: false
       version:
         type: string
-        description: Release number. If undefined, the workflow auto-generates a version using git-describe
+        description: Release number
         required: false
       zenoh-version:
         type: string
-        description: Release number of Zenoh. Required in live-run mode and ignored in dry-run mode
+        description: Release number of Zenoh
         required: false
 
 jobs:
   tag:
-    name: Bump and tag crates
-    uses: eclipse-zenoh/ci/.github/workflows/tag-crates.yml@main
+    name: Branch, Bump & tag crates
+    uses: eclipse-zenoh/ci/.github/workflows/branch-bump-tag-crates.yml@main
     with:
       repo: ${{ github.repository }}
       live-run: ${{ inputs.live-run || false }}
       version: ${{ inputs.version }}
-      inter-deps-pattern: ${{ inputs.live-run && 'zenoh.*' || '^$' }}
-      inter-deps-version: ${{ inputs.live-run && inputs.zenoh-version || '' }}
+      bump-deps-version: ${{ inputs.zenoh-version }}
+      bump-deps-pattern: ${{ inputs.zenoh-version && 'zenoh.*' || '^$' }}
+      bump-deps-branch: ${{ inputs.zenoh-version && format('release/{0}', inputs.zenoh-version) || '' }}
     secrets: inherit
 
   build-debian:
@@ -62,37 +63,25 @@ jobs:
       version: ${{ needs.tag.outputs.version }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
     secrets: inherit
 
-  cargo-live-run:
-    if: ${{ inputs.live-run || false }}
-    name: Publish Cargo crates (live-run)
+  cargo:
     needs: tag
+    name: Publish Cargo crates
     uses: eclipse-zenoh/ci/.github/workflows/release-crates-cargo.yml@main
     with:
-      repos: ${{ github.repository }}
-      live-run: true
+      repo: ${{ github.repository }}
+      live-run: ${{ inputs.live-run || false }}
       branch: ${{ needs.tag.outputs.branch }}
-      inter-deps-pattern: ^$
-    secrets: inherit
-
-  # In dry-run mode, we need to publish eclipse-zenoh/zenoh before this repository,
-  # in which case the version of zenoh dependecies are left as is and thus point to
-  # the main branch of eclipse-zenoh/zenoh
-  cargo-dry-run:
-    if: ${{ !inputs.live-run || true }}
-    name: Publish Cargo crates (dry-run)
-    needs: tag
-    uses: eclipse-zenoh/ci/.github/workflows/release-crates-cargo.yml@main
-    with:
-      repos: |
-        eclipse-zenoh/zenoh
-        ${{ github.repository }}
-      live-run: false
-      branch: ${{ needs.tag.outputs.branch }}
-      inter-deps-pattern: zenoh.*
+      # - In dry-run mode, we need to publish eclipse-zenoh/zenoh before this
+      #   repository, in which case the version of zenoh dependecies are left as
+      #   is and thus point to the main branch of eclipse-zenoh/zenoh.
+      # - In live-run mode, we assume that eclipse-zenoh/zenoh is already
+      #   published as this workflow can't be responsible for publishing it
+      unpublished-deps-patterns: ${{ !(inputs.live-run || false) && 'zenoh.*' || '' }}
+      unpublished-deps-repos: ${{ !(inputs.live-run || false) && 'eclipse-zenoh/zenoh' || '' }}
     secrets: inherit
 
   debian:
@@ -105,6 +94,7 @@ jobs:
       version: ${{ needs.tag.outputs.version }}
       repo: ${{ github.repository }}
       branch: ${{ needs.tag.outputs.branch }}
+      installation-test: false
     secrets: inherit
 
   homebrew:
@@ -118,9 +108,10 @@ jobs:
       version: ${{ needs.tag.outputs.version }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.dylib$
+        ^libzenoh_backend_influxdb(2)?\.dylib$
       formulae: |
-        zenoh-backend-influxdb
+        zenoh-backend-influxdb-v1
+        zenoh-backend-influxdb-v2
     secrets: inherit
 
   eclipse:
@@ -134,8 +125,8 @@ jobs:
       repo: ${{ github.repository }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
       name: zenoh-backend-influxdb
     secrets: inherit
 
@@ -150,6 +141,6 @@ jobs:
       repo: ${{ github.repository }}
       branch: ${{ needs.tag.outputs.branch }}
       artifact-patterns: |
-        ^libzenoh_backend_influxdb(2)\.(dylib|so)$
-        ^zenoh_backend_influxdb(2)\.dll$
+        ^libzenoh_backend_influxdb(2)?\.(dylib|so)$
+        ^zenoh_backend_influxdb(2)?\.dll$
     secrets: inherit
