@@ -23,14 +23,13 @@ stats = ["zenoh/stats"]
 async-std = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
-env_logger = { workspace = true }
 git-version = { workspace = true }
 humantime = "2.1.0"
 influxdb = { version = "0.7.1", default-features = false, features = ["derive", "use-serde", "h1-client-rustls"] }
 lazy_static = { workspace = true }
-log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 zenoh = { workspace = true }
 zenoh_backend_traits = { workspace = true }

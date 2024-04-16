@@ -18,12 +18,12 @@ use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use influxdb::{
     Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
-use log::{debug, error, warn};
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 use zenoh::buffers::{buffer::SplitBuffer, ZBuf};
 use zenoh::prelude::*;
@@ -70,7 +70,7 @@ fn get_private_conf<'a>(
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
         PrivacyGetResult::Public(serde_json::Value::String(v)) => {
-            log::warn!(
+            tracing::warn!(
                 r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
                 v,
                 credit,
@@ -85,7 +85,7 @@ fn get_private_conf<'a>(
             public: serde_json::Value::String(public),
             private: serde_json::Value::String(private),
         } => {
-            log::warn!(
+            tracing::warn!(
                 r#"Value "{}" is given for `{}` publicly, but a private value also exists. The private value will be used, but the public value, which is {} the same as the private one, will still be visible in configurations."#,
                 public,
                 credit,
@@ -111,9 +111,8 @@ impl Plugin for InfluxDbBackend {
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
-        // For some reasons env_logger is sometime not active in a loaded library.
-        // Try to activate it here, ignoring failures.
-        let _ = env_logger::try_init();
+        zenoh_util::init_log_from_env();
+
         debug!("InfluxDB backend {}", Self::PLUGIN_VERSION);
 
         let mut config = config.clone();

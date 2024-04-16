@@ -71,7 +71,7 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
         PrivacyGetResult::NotFound => Ok(None),
         PrivacyGetResult::Private(serde_json::Value::String(v)) => Ok(Some(v)),
         PrivacyGetResult::Public(serde_json::Value::String(v)) => {
-            log::warn!(
+            tracing::warn!(
                 r#"Value "{}" is given for `{}` publicly (i.e. is visible by anyone who can fetch the router configuration). 
                 You may want to replace `{}: "{}"` with `private: {{{}: "{}"}}`"#,
                 v,
@@ -87,7 +87,7 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
             public: serde_json::Value::String(public),
             private: serde_json::Value::String(private),
         } => {
-            log::warn!(
+            tracing::warn!(
                 r#"Value "{}" is given for `{}` publicly, but a private value also exists. 
                 The private value will be used, 
                 but the public value, which is {} the same as the private one, will still be visible in configurations."#,
@@ -117,7 +117,7 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
             token: token.clone(),
         })),
         _ => {
-            log::error!("Couldn't get token and org");
+            tracing::error!("Couldn't get token and org");
             bail!(
                 "Properties `{}` and `{}` must exist",
                 PROP_BACKEND_ORG_ID,
@@ -139,10 +139,9 @@ impl Plugin for InfluxDbBackend {
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
-        // For some reasons env_logger is sometime not active in a loaded library.
-        // Try to activate it here, ignoring failures.
-        let _ = env_logger::try_init();
-        log::debug!("InfluxDBv2 backend {}", Self::PLUGIN_VERSION);
+        zenoh_util::init_log_from_env();
+
+        tracing::debug!("InfluxDBv2 backend {}", Self::PLUGIN_VERSION);
 
         let mut config = config.clone();
         config
@@ -400,7 +399,7 @@ impl InfluxDbStorage {
                 query_result = result;
             }
             Err(e) => {
-                log::error!(
+                tracing::error!(
                     "Couldn't get data from InfluxDBv2 database {} with error: {} ",
                     db,
                     e
@@ -464,7 +463,7 @@ impl Storage for InfluxDbStorage {
         if let Some(del_time) = self.get_deletion_timestamp(measurement.as_str()).await? {
             // ignore sample if oldest than the deletion
             if timestamp < del_time {
-                log::debug!(
+                tracing::debug!(
                     "Received a value for {:?} with timestamp older than its deletion in InfluxDBv2 database; Ignore it",
                     measurement
                 );
@@ -526,7 +525,7 @@ impl Storage for InfluxDbStorage {
         .expect("Couldn't convert uhlc timestamp to naivedatetime");
 
         let predicate = None; //can be specified with tag or field values
-        log::debug!(
+        tracing::debug!(
             "Delete {:?} with Influx query in InfluxDBv2 storage",
             measurement
         );
@@ -555,7 +554,7 @@ impl Storage for InfluxDbStorage {
             .timestamp(influx_time) //converted timestamp to i64
             .build()?];
 
-        log::debug!(
+        tracing::debug!(
             "Mark measurement {} as deleted at time {} in InfluxDBv2 storage",
             measurement.clone(),
             stop_timestamp
@@ -626,7 +625,7 @@ impl Storage for InfluxDbStorage {
             }
         }
 
-        log::debug!(
+        tracing::debug!(
             "Get {:?} with Influx query:{} in InfluxDBv2 storage",
             key,
             qs
@@ -642,7 +641,7 @@ impl Storage for InfluxDbStorage {
                 query_result = result;
             }
             Err(e) => {
-                log::error!(
+                tracing::error!(
                     "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
                     db,
                     e
@@ -676,7 +675,7 @@ impl Storage for InfluxDbStorage {
                 match b64_std_engine.decode(zpoint.value) {
                     Ok(v) => ZBuf::from(v),
                     Err(e) => {
-                        log::warn!(
+                        tracing::warn!(
                             r#"Failed to decode zenoh base64 Value from Influx point with timestamp="{}": {}"#,
                             zpoint.timestamp,
                             e
@@ -691,7 +690,7 @@ impl Storage for InfluxDbStorage {
             let timestamp = match Timestamp::from_str(&zpoint.timestamp) {
                 Ok(t) => t,
                 Err(e) => {
-                    log::warn!(
+                    tracing::warn!(
                         r#"Failed to decode zenoh Timestamp from Influx point with timestamp="{}": {:?}"#,
                         zpoint.timestamp,
                         e
@@ -707,7 +706,7 @@ impl Storage for InfluxDbStorage {
 
     //putting a stub here to be implemented later
     async fn get_all_entries(&self) -> ZResult<Vec<(Option<OwnedKeyExpr>, Timestamp)>> {
-        log::warn!("called get_all_entries in InfluxDBv2 storage");
+        tracing::warn!("called get_all_entries in InfluxDBv2 storage");
         let mut result: Vec<(Option<OwnedKeyExpr>, Timestamp)> = Vec::new();
         let curr_time = zenoh::time::new_reception_timestamp();
         result.push((None, curr_time));
@@ -725,11 +724,11 @@ fn get_db_name(config: StorageConfig) -> ZResult<String> {
 
 impl Drop for InfluxDbStorage {
     fn drop(&mut self) {
-        log::debug!("Closing InfluxDBv2 storage");
+        tracing::debug!("Closing InfluxDBv2 storage");
         let db = match self.config.volume_cfg.get(PROP_STORAGE_DB) {
             Some(serde_json::Value::String(s)) => s.to_string(),
             _ => {
-                log::error!("no db was found");
+                tracing::error!("no db was found");
                 return;
             }
         };
@@ -737,22 +736,22 @@ impl Drop for InfluxDbStorage {
         match self.on_closure {
             OnClosure::DropDb => {
                 task::block_on(async move {
-                    log::debug!("Close InfluxDBv2 storage, dropping database {}", db);
+                    tracing::debug!("Close InfluxDBv2 storage, dropping database {}", db);
                     if let Err(e) = self.admin_client.delete_bucket(&db).await {
-                        log::error!("Failed to drop InfluxDbv2 database '{}' : {}", db, e)
+                        tracing::error!("Failed to drop InfluxDbv2 database '{}' : {}", db, e)
                     }
                 });
             }
             OnClosure::DropSeries => {
                 task::block_on(async move {
-                    log::debug!(
+                    tracing::debug!(
                         "Close InfluxDBv2 storage, dropping all series from database {}",
                         db
                     );
                     let start = NaiveDateTime::MIN;
                     let stop = NaiveDateTime::MAX;
                     if let Err(e) = self.client.delete(&db, start, stop, None).await {
-                        log::error!(
+                        tracing::error!(
                             "Failed to drop all series from InfluxDbv2 database '{}' : {}",
                             db,
                             e
@@ -761,7 +760,7 @@ impl Drop for InfluxDbStorage {
                 });
             }
             OnClosure::DoNothing => {
-                log::debug!("Close InfluxDBv2 storage, keeping database {} as it is", db);
+                tracing::debug!("Close InfluxDBv2 storage, keeping database {} as it is", db);
             }
         }
     }
