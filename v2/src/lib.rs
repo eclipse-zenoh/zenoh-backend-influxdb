@@ -128,6 +128,8 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
 }
 
 pub struct InfluxDbBackend {}
+
+#[cfg(feature = "dynamic_plugin")]
 zenoh_plugin_trait::declare_plugin!(InfluxDbBackend);
 
 impl Plugin for InfluxDbBackend {
