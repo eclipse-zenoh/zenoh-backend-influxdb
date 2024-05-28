@@ -17,11 +17,9 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use chrono::{NaiveDateTime, SecondsFormat};
 use futures::prelude::*;
-use influxdb2::api::buckets::ListBucketsRequest;
 use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
-use influxdb2::FromDataPoint;
 use zenoh::buffers::ZBuf;
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
@@ -222,10 +220,9 @@ impl Volume for InfluxDbVolume {
     }
 
     async fn create_storage(&self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
-        let volume_cfg = match config.volume_cfg.as_object() {
-            Some(v) => v,
-            None => bail!("InfluxDBv2 backed storages need some volume-specific configuration"),
-        };
+        let volume_cfg = config.volume_cfg.as_object().ok_or_else(|| {
+            zerror!("InfluxDBv2 backed storages need some volume-specific configuration")
+        })?;
 
         let on_closure = match volume_cfg.get(PROP_STORAGE_ON_CLOSURE) {
             Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
@@ -240,6 +237,7 @@ impl Volume for InfluxDbVolume {
                 )
             }
         };
+
         let (db, createdb) = match volume_cfg.get(PROP_STORAGE_DB) {
             Some(serde_json::Value::String(s)) => (
                 s.clone(),
@@ -268,6 +266,8 @@ impl Volume for InfluxDbVolume {
             Some(creds) => creds,
             _ => bail!("No credentials specified to access database '{}'", db),
         };
+
+        // Client::new can panic: TODO : Switch to libraries without Panics
         let client = match std::panic::catch_unwind(|| {
             Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
         }) {
@@ -275,25 +275,20 @@ impl Volume for InfluxDbVolume {
             Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
         };
 
-        //check if db exists, if it doesn't create one if user has set createdb=true in config
-        match async_std::task::block_on(async { is_db_existing(&client, &db).await }) {
-            Ok(res) => {
-                if !res && createdb {
-                    // try to create db using user credentials
-                    match async_std::task::block_on(async {
-                        create_db(&self.admin_client, &creds.org_id, &db).await
-                    }) {
-                        Ok(res) => {
-                            if !res {
-                                bail!("Database '{}' wasnt't created in InfluxDBv2 storage", db)
-                            }
-                        }
+        match does_db_exist(&client, &db).await {
+            Ok(db_exists) => {
+                if !db_exists && createdb {
+                    // Try to create db using user credentials
+                    match create_db(&self.admin_client, &creds.org_id, &db).await {
+                        Ok(_) => tracing::info!("Created {db} Influx"),
                         Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
                     }
+                } else if db_exists && createdb {
+                    tracing::warn!("Database '{db}' already exists exists in Influx and config 'create_db'='true'");
                 }
             }
-            Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
-        }
+            Err(e) => bail!("Failed to get Buckets from InfluxDB : {:?}", e),
+        };
 
         config
             .volume_cfg
@@ -307,6 +302,7 @@ impl Volume for InfluxDbVolume {
             Some(creds) => creds,
             None => bail!("No credentials specified to access database '{}'", db),
         };
+
         let admin_client = match std::panic::catch_unwind(|| {
             Client::new(url.clone(), &admin_creds.org_id, &admin_creds.token)
         }) {
@@ -356,6 +352,53 @@ impl TryFrom<&Properties> for OnClosure {
     }
 }
 
+#[derive(Debug, Default)]
+struct ZenohPoint {
+    #[allow(dead_code)]
+    // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
+    kind: String,
+    timestamp: String,
+    encoding_prefix: i64, //should be u8 but not supported in v2.x so using a workaround
+    encoding_suffix: String,
+    base64: bool,
+    value: String,
+}
+
+// Safest Thing for now is to send back default values if keys dont exist in query
+// But a proper solution would be real deserializing of the structure
+// Either you get the full data into a Zenoh Point or the function fails to deserialize
+// Or we make the fields of a Zenoh Point optional
+// I do not like using a Default value and expecting the GenericMap to have the values
+// The underlying library influxDB2 must change to support proper Deserialization
+// as influxdb2::FromMap should be Failable
+impl influxdb2::FromMap for ZenohPoint {
+    fn from_genericmap(map: influxdb2_structmap::GenericMap) -> Self {
+        use influxdb2_structmap::value::Value as V;
+
+        let mut z_point = ZenohPoint::default();
+
+        if let Some(V::String(kind)) = map.get("kind") {
+            z_point.kind = kind.clone();
+        };
+        if let Some(V::String(timestamp)) = map.get("timestamp") {
+            z_point.timestamp = timestamp.clone();
+        };
+        if let Some(V::Long(encoding_prefix)) = map.get("encoding_prefix") {
+            z_point.encoding_prefix = encoding_prefix.clone();
+        };
+        if let Some(V::String(encoding_suffix)) = map.get("encoding_suffix") {
+            z_point.encoding_suffix = encoding_suffix.clone();
+        };
+        if let Some(V::Bool(base64)) = map.get("base64") {
+            z_point.base64 = *base64;
+        };
+        if let Some(V::String(value)) = map.get("value") {
+            z_point.value = value.clone();
+        };
+        z_point
+    }
+}
+
 struct InfluxDbStorage {
     config: StorageConfig,
     admin_client: Client,
@@ -378,40 +421,19 @@ impl InfluxDbStorage {
         );
 
         // get the value and if it exists then extract the timestamp from it
-
-        #[derive(Debug, Default, FromDataPoint)]
-        struct ZenohPoint {
-            #[allow(dead_code)]
-            // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
-            kind: String,
-            timestamp: String,
-            encoding_prefix: i64, //should be u8 but not supported in v2.x so using a workaround
-            encoding_suffix: String,
-            base64: bool,
-            value: String,
-        }
-
         let query = Query::new(qs);
-        let mut query_result: Vec<ZenohPoint> = vec![];
-
-        match async_std::task::block_on(async {
-            self.client.query::<ZenohPoint>(Some(query)).await
-        }) {
-            Ok(result) => {
-                query_result = result;
-            }
+        let query_result: Vec<ZenohPoint> = match self.client.query::<ZenohPoint>(Some(query)).await
+        {
+            Ok(result) => result,
             Err(e) => {
                 tracing::error!(
                     "Couldn't get data from InfluxDBv2 database {} with error: {} ",
                     db,
                     e
                 );
+                return Ok(None);
             }
         };
-
-        if query_result.is_empty() {
-            return Ok(None);
-        }
 
         match Timestamp::from_str(&query_result[0].timestamp) {
             Ok(ts) => Ok(Some(ts)),
@@ -520,11 +542,12 @@ impl Storage for InfluxDbStorage {
         let db = get_db_name(self.config.clone())?;
 
         let start_timestamp = NaiveDateTime::UNIX_EPOCH;
-        let stop_timestamp = NaiveDateTime::from_timestamp_opt(
+
+        let stop_timestamp = chrono::DateTime::from_timestamp(
             timestamp.get_time().as_secs() as i64,
             timestamp.get_time().subsec_nanos(),
         )
-        .expect("Couldn't convert uhlc timestamp to naivedatetime");
+        .ok_or_else(|| zerror!("delete: timestamp out of range"))?;
 
         let predicate = None; //can be specified with tag or field values
         tracing::debug!(
@@ -533,7 +556,7 @@ impl Storage for InfluxDbStorage {
         );
         if let Err(e) = self
             .client
-            .delete(&db, start_timestamp, stop_timestamp, predicate)
+            .delete(&db, start_timestamp, stop_timestamp.naive_utc(), predicate)
             .await
         {
             bail!(
@@ -586,20 +609,6 @@ impl Storage for InfluxDbStorage {
         };
 
         let db = get_db_name(self.config.clone())?;
-
-        // the expected JSon type resulting from the query
-        // #[derive(Deserialize, Debug)]
-        #[derive(Debug, Default, FromDataPoint)]
-        struct ZenohPoint {
-            #[allow(dead_code)]
-            // NOTE: "kind" is present within InfluxDB and used in query clauses, but not read in Rust...
-            kind: String,
-            timestamp: String,
-            encoding_prefix: i64, //should be u8 but not supported in v2.x so using a workaround
-            encoding_suffix: String,
-            base64: bool,
-            value: String,
-        }
 
         #[allow(unused_assignments)]
         let mut qs: String = String::new();
@@ -787,32 +796,21 @@ fn generate_db_name() -> String {
     format!("zenoh_db_{}", Uuid::new_v4().simple())
 }
 
-async fn is_db_existing(client: &Client, db: &str) -> ZResult<bool> {
-    let request = ListBucketsRequest {
-        name: Some(db.to_owned()),
-        ..ListBucketsRequest::default()
-    };
-
-    let dbs = client.list_buckets(Some(request)).await?.buckets;
-    if !dbs.is_empty() {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+async fn does_db_exist(client: &Client, db: &str) -> ZResult<bool> {
+    Ok(client
+        .list_buckets(None)
+        .await?
+        .buckets
+        .into_iter()
+        .find(|bucket| bucket.name == db)
+        .is_some())
 }
 
-async fn create_db(client: &Client, org_id: &str, db: &str) -> ZResult<bool> {
-    let result = client
-        .create_bucket(Some(PostBucketRequest::new(
-            org_id.to_owned(),
-            db.to_owned(),
-        )))
-        .await;
-    match result {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false), //can post error here
-    }
+async fn create_db(client: &Client, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
+    let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
+    client.create_bucket(Some(post_bucket_options)).await
 }
+
 // Returns an InfluxDB regex (see https://docs.influxdata.com/influxdb/v1.8/query_language/explore-data/#regular-expressions)
 // corresponding to the list of path expressions. I.e.:
 // Replace "**" with ".*", "*" with "[^\/]*"  and "/" with "\/".
@@ -885,7 +883,6 @@ fn write_timeexpr(s: &mut String, t: TimeExpr, i: u64) {
     use std::fmt::Write;
     match t {
         TimeExpr::Fixed(t) => {
-            // let tm = t +
             let time_duration = t.duration_since(UNIX_EPOCH).expect("Time went backwards")
                 + Duration::from_nanos(i); //adding 1ns for inclusive timebinding ;
             let datetime = chrono::DateTime::from_timestamp(
