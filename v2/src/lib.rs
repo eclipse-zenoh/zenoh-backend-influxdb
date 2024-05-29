@@ -732,7 +732,7 @@ impl Storage for InfluxDbStorage {
     ///     ("demo/b",t3),
     ///     ("demo/a",t2),
     /// ]
-    /// get_all_entries returns 
+    /// get_all_entries returns
     /// [
     ///     ("demo/a",3),
     ///     ("demo/b",3)
