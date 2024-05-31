@@ -17,27 +17,22 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use chrono::{NaiveDateTime, SecondsFormat};
 use futures::prelude::*;
-use influxdb2::models::Query;
-use influxdb2::models::{DataPoint, PostBucketRequest};
-use influxdb2::Client;
-
-use std::convert::{TryFrom, TryInto};
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::{Duration, Instant, UNIX_EPOCH};
-use uuid::Uuid;
-use zenoh::buffers::buffer::SplitBuffer;
-use zenoh::buffers::ZBuf;
-use zenoh::prelude::*;
-use zenoh::properties::Properties;
-use zenoh::selector::TimeExpr;
-use zenoh::time::Timestamp;
-use zenoh::Result as ZResult;
-use zenoh_backend_traits::config::{
-    PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
+use influxdb2::{
+    models::{DataPoint, PostBucketRequest, Query},
+    Client,
 };
-use zenoh_backend_traits::StorageInsertionResult;
-use zenoh_backend_traits::*;
+use std::convert::{TryFrom, TryInto};
+use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::{str::FromStr, sync::Arc};
+use uuid::Uuid;
+use zenoh::buffers::{buffer::SplitBuffer, ZBuf};
+use zenoh::Result as ZResult;
+use zenoh::{prelude::*, properties::Properties, selector::TimeExpr, time::Timestamp};
+use zenoh_backend_traits::{
+    config::{PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig},
+    Capability, History, Persistence, Storage, StorageInsertionResult, StoredData, Volume,
+    VolumeInstance,
+};
 use zenoh_core::{bail, zerror};
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
@@ -560,7 +555,7 @@ impl Storage for InfluxDbStorage {
             timestamp.get_time().as_secs() as i64,
             timestamp.get_time().subsec_nanos(),
         )
-        .ok_or_else(|| zerror!("delete: timestamp out of range"))?;
+        .ok_or_else(|| zerror!("delete: stop_timestamp out of range"))?;
 
         let predicate = None; //can be specified with tag or field values
         tracing::debug!(
@@ -617,7 +612,6 @@ impl Storage for InfluxDbStorage {
         parameters: &str,
     ) -> ZResult<Vec<StoredData>> {
         let owned_key = key.unwrap_or(self.none_key.clone());
-        // let measurement = key.unwrap_or(self.none_key.clone());
 
         let db = get_db_name(self.config.clone())?;
 
