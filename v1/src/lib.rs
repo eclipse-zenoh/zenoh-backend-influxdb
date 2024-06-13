@@ -423,7 +423,7 @@ impl Storage for InfluxDbStorage {
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
-        let encoding_string_rep = value.encoding().clone().to_string();
+        let encoding_string_rep = value.encoding().clone().to_string();     // TODO: This i am not entirely sure about
         let encoding: zenoh_protocol::core::Encoding = (value.encoding().clone()).into();
 
         let query = InfluxWQuery::new(
@@ -433,7 +433,7 @@ impl Storage for InfluxDbStorage {
         .add_tag("kind", "PUT")
         .add_field("timestamp", timestamp.to_string())
         .add_field("encoding_prefix", u16::from(encoding.id))
-        .add_field("encoding_suffix", encoding_string_rep)
+        .add_field("encoding_suffix", encoding_string_rep)  // TODO: This i am not entirely sure about
         .add_field("base64", base64)
         .add_field("value", strvalue);
 

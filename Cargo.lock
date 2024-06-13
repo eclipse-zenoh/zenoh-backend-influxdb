@@ -4070,9 +4070,12 @@ dependencies = [
  "tracing",
  "uuid",
  "zenoh",
+ "zenoh-buffers",
  "zenoh-collections",
  "zenoh-core",
+ "zenoh-keyexpr",
  "zenoh-plugin-trait",
+ "zenoh-protocol",
  "zenoh-util",
  "zenoh_backend_traits",
 ]
