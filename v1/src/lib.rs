@@ -21,13 +21,11 @@ use influxdb::{
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
-use zenoh::buffers::{buffer::SplitBuffer, ZBuf};
-use zenoh::prelude::*;
-use zenoh::properties::Properties;
+use zenoh::encoding::Encoding;
+use zenoh::key_expr::KeyExpr;
 use zenoh::selector::TimeExpr;
 use zenoh::time::Timestamp;
 use zenoh::Result as ZResult;
@@ -36,9 +34,15 @@ use zenoh_backend_traits::config::{
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
+use zenoh_buffers::buffer::SplitBuffer;
+use zenoh_buffers::ZBuf;
 use zenoh_core::{bail, zerror};
+use zenoh_keyexpr::{keyexpr, OwnedKeyExpr};
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
+use zenoh_protocol::core::Parameters;
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
+
+use zenoh::internal::Value;
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -279,14 +283,6 @@ impl Volume for InfluxDbVolume {
             timer: Timer::default(),
         }))
     }
-
-    fn incoming_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
-        None
-    }
-
-    fn outgoing_data_interceptor(&self) -> Option<Arc<dyn Fn(Sample) -> Sample + Send + Sync>> {
-        None
-    }
 }
 
 enum OnClosure {
@@ -295,9 +291,9 @@ enum OnClosure {
     DoNothing,
 }
 
-impl TryFrom<&Properties> for OnClosure {
+impl TryFrom<&Parameters<'_>> for OnClosure {
     type Error = zenoh_core::Error;
-    fn try_from(p: &Properties) -> ZResult<OnClosure> {
+    fn try_from(p: &Parameters) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
                 if s == "drop_db" {
@@ -418,24 +414,29 @@ impl Storage for InfluxDbStorage {
         }
 
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-        let (base64, strvalue) = match String::from_utf8(value.payload.contiguous().into_owned()) {
-            Ok(s) => (false, s),
-            Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
-        };
+        let (base64, strvalue) =
+            match String::from_utf8(ZBuf::from(value.payload()).contiguous().into_owned()) {
+                Ok(s) => (false, s),
+                Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
+            };
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
+        let encoding_string_rep = value.encoding().clone().to_string();
+        let encoding: zenoh_protocol::core::Encoding = (value.encoding().clone()).into();
+
         let query = InfluxWQuery::new(
             InfluxTimestamp::Nanoseconds(influx_time),
             measurement.clone(),
         )
         .add_tag("kind", "PUT")
         .add_field("timestamp", timestamp.to_string())
-        .add_field("encoding_prefix", u8::from(*value.encoding.prefix()))
-        .add_field("encoding_suffix", value.encoding.suffix())
+        .add_field("encoding_prefix", u16::from(encoding.id))
+        .add_field("encoding_suffix", encoding_string_rep)
         .add_field("base64", base64)
         .add_field("value", strvalue);
+
         debug!("Put {:?} with Influx query: {:?}", measurement, query);
         if let Err(e) = self.client.query(&query).await {
             bail!(
@@ -554,17 +555,15 @@ impl Storage for InfluxDbStorage {
                                 // for each point
                                 for zpoint in serie.values {
                                     // get the encoding
-                                    let encoding_prefix =
+                                    let encoding_prefix: u16 =
                                         zpoint.encoding_prefix.try_into().map_err(|_| {
                                             zerror!("Unknown encoding {}", zpoint.encoding_prefix)
                                         })?;
+
                                     let encoding = if zpoint.encoding_suffix.is_empty() {
-                                        Encoding::Exact(encoding_prefix)
+                                        Encoding::new(encoding_prefix, None)
                                     } else {
-                                        Encoding::WithSuffix(
-                                            encoding_prefix,
-                                            zpoint.encoding_suffix.into(),
-                                        )
+                                        Encoding::from(zpoint.encoding_suffix)
                                     };
                                     // get the payload
                                     let payload = if zpoint.base64 {
@@ -592,7 +591,7 @@ impl Storage for InfluxDbStorage {
                                             continue;
                                         }
                                     };
-                                    let value = Value::new(payload).encoding(encoding);
+                                    let value = Value::new(payload, encoding);
                                     result.push(StoredData { value, timestamp });
                                 }
                             }
@@ -892,12 +891,12 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 }
 
 fn clauses_from_parameters(p: &str) -> ZResult<String> {
-    use zenoh::selector::{TimeBound, TimeRange};
-    let time_range = p.time_range()?;
+    use zenoh_util::time_range::{TimeBound, TimeRange};
+    let time_range = TimeRange::from_str(p);
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
     match time_range {
-        Some(TimeRange(start, stop)) => {
+        Ok(TimeRange(start, stop)) => {
             match start {
                 TimeBound::Inclusive(t) => {
                     result.push_str(" AND time >= ");
@@ -921,7 +920,8 @@ fn clauses_from_parameters(p: &str) -> ZResult<String> {
                 TimeBound::Unbounded => {}
             }
         }
-        None => {
+        Err(err) => {
+            warn!("Error In TimeRange parse from String {}", err);
             //No time selection, return only latest values
             result.push_str(" ORDER BY time DESC LIMIT 1");
         }
