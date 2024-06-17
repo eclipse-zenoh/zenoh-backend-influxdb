@@ -22,28 +22,26 @@ use influxdb2::models::Query;
 use influxdb2::models::{DataPoint, PostBucketRequest};
 use influxdb2::Client;
 use influxdb2::FromDataPoint;
-use zenoh::encoding::Encoding;
-use zenoh_buffers::ZBuf;
-use zenoh_keyexpr::{keyexpr, OwnedKeyExpr};
-use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
-
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use uuid::Uuid;
-use zenoh::internal::Value;
-use zenoh::selector::TimeExpr;
+use zenoh::encoding::Encoding;
+use zenoh::internal::{
+    bail,
+    buffers::{SplitBuffer, ZBuf},
+    zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
+};
+use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
+use zenoh::selector::{Parameters, TimeExpr};
 use zenoh::time::{new_timestamp, Timestamp};
-use zenoh::Result as ZResult;
+use zenoh::{try_init_log_from_env, Error, Result as ZResult};
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_buffers::buffer::SplitBuffer;
-use zenoh_core::{bail, zerror};
-use zenoh_protocol::core::Parameters;
-use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
+use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -142,7 +140,7 @@ impl Plugin for InfluxDbBackend {
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
-        zenoh_util::try_init_log_from_env();
+        try_init_log_from_env();
 
         tracing::debug!("InfluxDBv2 backend {}", Self::PLUGIN_VERSION);
 
@@ -332,7 +330,7 @@ enum OnClosure {
 }
 
 impl TryFrom<&Parameters<'_>> for OnClosure {
-    type Error = zenoh_core::Error;
+    type Error = Error;
     fn try_from(p: &Parameters) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
@@ -480,12 +478,12 @@ impl Storage for InfluxDbStorage {
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
         let encoding_string_rep = value.encoding().clone().to_string(); // TODO: This i am not entirely sure about
-        let encoding: zenoh_protocol::core::Encoding = (value.encoding().clone()).into();
+        let encoding: Encoding = (value.encoding().clone()).into();
 
         let zenoh_point = vec![DataPoint::builder(measurement.clone())
             .tag("kind", "PUT")
             .field("timestamp", timestamp.to_string())
-            .field("encoding_prefix", u16::from(encoding.id) as i64) //should be u8 but not supported in v2.x so using a workaround
+            .field("encoding_prefix", u16::from(encoding.id()) as i64) //should be u8 but not supported in v2.x so using a workaround
             .field("encoding_suffix", encoding_string_rep) // TODO: This i am not entirely sure about
             .field("base64", base64)
             .field("value", strvalue)

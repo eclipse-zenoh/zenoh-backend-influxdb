@@ -41,13 +41,7 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 zenoh = { workspace = true, features = ["unstable", "internal"] }
 zenoh_backend_traits = { workspace = true }
-zenoh-collections = { workspace = true }
-zenoh-core = { workspace = true }
-zenoh-util = { workspace = true }
 zenoh-plugin-trait = { workspace = true }
-zenoh-buffers = { workspace = true }
-zenoh-protocol = { workspace = true }
-zenoh-keyexpr = { workspace = true }
 
 [build-dependencies]
 rustc_version = "0.4.0"

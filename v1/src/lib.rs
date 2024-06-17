@@ -25,24 +25,22 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 use zenoh::encoding::Encoding;
+use zenoh::internal::{
+    bail,
+    buffers::{SplitBuffer, ZBuf},
+    zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
+};
 use zenoh::key_expr::KeyExpr;
-use zenoh::selector::TimeExpr;
+use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
+use zenoh::selector::{Parameters, TimeBound, TimeExpr, TimeRange};
 use zenoh::time::Timestamp;
-use zenoh::Result as ZResult;
+use zenoh::{try_init_log_from_env, Error, Result as ZResult};
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
 use zenoh_backend_traits::StorageInsertionResult;
 use zenoh_backend_traits::*;
-use zenoh_buffers::buffer::SplitBuffer;
-use zenoh_buffers::ZBuf;
-use zenoh_core::{bail, zerror};
-use zenoh_keyexpr::{keyexpr, OwnedKeyExpr};
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
-use zenoh_protocol::core::Parameters;
-use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
-
-use zenoh::internal::Value;
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -117,7 +115,7 @@ impl Plugin for InfluxDbBackend {
     const PLUGIN_LONG_VERSION: &'static str = plugin_long_version!();
 
     fn start(_name: &str, config: &Self::StartArgs) -> ZResult<Self::Instance> {
-        zenoh_util::try_init_log_from_env();
+        try_init_log_from_env();
 
         debug!("InfluxDB backend {}", Self::PLUGIN_VERSION);
 
@@ -292,7 +290,7 @@ enum OnClosure {
 }
 
 impl TryFrom<&Parameters<'_>> for OnClosure {
-    type Error = zenoh_core::Error;
+    type Error = Error;
     fn try_from(p: &Parameters) -> ZResult<OnClosure> {
         match p.get(PROP_STORAGE_ON_CLOSURE) {
             Some(s) => {
@@ -424,7 +422,7 @@ impl Storage for InfluxDbStorage {
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
         let encoding_string_rep = value.encoding().clone().to_string(); // TODO: This i am not entirely sure about
-        let encoding: zenoh_protocol::core::Encoding = (value.encoding().clone()).into();
+        let encoding: Encoding = (value.encoding().clone()).into();
 
         let query = InfluxWQuery::new(
             InfluxTimestamp::Nanoseconds(influx_time),
@@ -432,7 +430,7 @@ impl Storage for InfluxDbStorage {
         )
         .add_tag("kind", "PUT")
         .add_field("timestamp", timestamp.to_string())
-        .add_field("encoding_prefix", u16::from(encoding.id))
+        .add_field("encoding_prefix", u16::from(encoding.id()))
         .add_field("encoding_suffix", encoding_string_rep) // TODO: This i am not entirely sure about
         .add_field("base64", base64)
         .add_field("value", strvalue);
@@ -891,7 +889,7 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 }
 
 fn clauses_from_parameters(p: &str) -> ZResult<String> {
-    use zenoh_util::time_range::{TimeBound, TimeRange};
+    // use TimeBound, TimeRange};
     let time_range = TimeRange::from_str(p);
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
