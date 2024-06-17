@@ -31,6 +31,7 @@ use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use uuid::Uuid;
+use zenoh::internal::Value;
 use zenoh::selector::TimeExpr;
 use zenoh::time::{new_timestamp, Timestamp};
 use zenoh::Result as ZResult;
@@ -43,8 +44,6 @@ use zenoh_buffers::buffer::SplitBuffer;
 use zenoh_core::{bail, zerror};
 use zenoh_protocol::core::Parameters;
 use zenoh_util::{Timed, TimedEvent, TimedHandle, Timer};
-
-use zenoh::internal::Value;
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
