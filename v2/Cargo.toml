@@ -39,7 +39,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-zenoh = { workspace = true, features = ["unstable", "internal","plugins"] }
+zenoh = { workspace = true, features = ["unstable", "internal", "plugins"] }
 zenoh_backend_traits = { workspace = true }
 zenoh-plugin-trait = { workspace = true }
 

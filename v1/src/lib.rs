@@ -25,11 +25,7 @@ use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 use zenoh::encoding::Encoding;
-use zenoh::internal::{
-    bail,
-    buffers::{SplitBuffer, ZBuf},
-    zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
-};
+use zenoh::internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value};
 use zenoh::key_expr::KeyExpr;
 use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
 use zenoh::selector::{Parameters, TimeBound, TimeExpr, TimeRange};
@@ -412,11 +408,10 @@ impl Storage for InfluxDbStorage {
         }
 
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-        let (base64, strvalue) =
-            match String::from_utf8(ZBuf::from(value.payload()).contiguous().into_owned()) {
-                Ok(s) => (false, s),
-                Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
-            };
+        let (base64, strvalue) = match String::from_utf8(value.payload().into::<Vec<u8>>()) {
+            Ok(s) => (false, s),
+            Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
+        };
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.

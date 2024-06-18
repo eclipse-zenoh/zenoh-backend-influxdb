@@ -484,7 +484,7 @@ impl Storage for InfluxDbStorage {
             .tag("kind", "PUT")
             .field("timestamp", timestamp.to_string())
             .field("encoding_prefix", u16::from(encoding.id()) as i64) //should be u8 but not supported in v2.x so using a workaround
-            .field("encoding_suffix", encoding_string_rep) // TODO: This i am not entirely sure about
+            .field("encoding_suffix", encoding_string_rep) // TODO: Left for compatibility, consider replacing wiht single "Encoding" field
             .field("base64", base64)
             .field("value", strvalue)
             .timestamp(influx_time) //converted timestamp to i64
@@ -658,11 +658,6 @@ impl Storage for InfluxDbStorage {
                     zpoint.encoding_prefix
                 ))
             })?;
-            // let encoding = if zpoint.encoding_suffix.is_empty() {
-            //     Encoding::Exact(encoding_prefix)
-            // } else {
-            //     Encoding::WithSuffix(encoding_prefix, zpoint.encoding_suffix.into())
-            // };
 
             let encoding = if zpoint.encoding_suffix.is_empty() {
                 Encoding::new(encoding_prefix, None)
@@ -708,6 +703,7 @@ impl Storage for InfluxDbStorage {
         tracing::warn!("!!! get_all_entries is NOT implemented yet !!!"); // See : https://github.com/ZettaScaleLabs/zenoh-backend-influxdb/pull/4
         tracing::warn!("called get_all_entries in InfluxDBv2 storage");
         let mut result: Vec<(Option<OwnedKeyExpr>, Timestamp)> = Vec::new();
+        // TODO: Pass real zid from session instead
         let curr_time = match std::num::NonZeroU128::new(1u128).map(new_timestamp) {
             Some(x) => x,
             None => {
