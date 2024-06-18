@@ -408,9 +408,9 @@ impl Storage for InfluxDbStorage {
         }
 
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-        let (base64, strvalue) = match String::from_utf8(value.payload().into::<Vec<u8>>()) {
+        let (base64, strvalue) = match value.payload().deserialize::<String>() {
             Ok(s) => (false, s),
-            Err(err) => (true, b64_std_engine.encode(err.into_bytes())),
+            Err(err) => (true, b64_std_engine.encode(err.to_string())),
         };
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
