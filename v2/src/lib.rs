@@ -477,7 +477,7 @@ impl Storage for InfluxDbStorage {
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
-        let encoding_string_rep = value.encoding().clone().to_string(); // TODO: This i am not entirely sure about
+        let encoding_string_rep = value.encoding().clone().to_string(); // field only supports Strings and not Vec<u8>
         let encoding: Encoding = (value.encoding().clone()).into();
 
         let zenoh_point = vec![DataPoint::builder(measurement.clone())

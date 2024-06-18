@@ -416,7 +416,7 @@ impl Storage for InfluxDbStorage {
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
-        let encoding_string_rep = value.encoding().clone().to_string(); // TODO: This i am not entirely sure about
+        let encoding_string_rep = value.encoding().clone().to_string(); // add_field only supports Strings and not Vec<u8>
         let encoding: Encoding = (value.encoding().clone()).into();
 
         let query = InfluxWQuery::new(
@@ -426,7 +426,7 @@ impl Storage for InfluxDbStorage {
         .add_tag("kind", "PUT")
         .add_field("timestamp", timestamp.to_string())
         .add_field("encoding_prefix", u16::from(encoding.id()))
-        .add_field("encoding_suffix", encoding_string_rep) // TODO: This i am not entirely sure about
+        .add_field("encoding_suffix", encoding_string_rep) // TODO: Rename To Encoding and only keep String rep
         .add_field("base64", base64)
         .add_field("value", strvalue);
 
@@ -884,7 +884,6 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 }
 
 fn clauses_from_parameters(p: &str) -> ZResult<String> {
-    // use TimeBound, TimeRange};
     let time_range = TimeRange::from_str(p);
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
