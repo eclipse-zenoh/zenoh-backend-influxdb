@@ -12,6 +12,12 @@
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 //
 
+use std::{
+    convert::{TryFrom, TryInto},
+    str::FromStr,
+    time::{Duration, Instant},
+};
+
 use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
@@ -19,23 +25,20 @@ use influxdb::{
     Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
 use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
-use std::str::FromStr;
-use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
-use zenoh::encoding::Encoding;
-use zenoh::internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value};
-use zenoh::key_expr::KeyExpr;
-use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
-use zenoh::selector::{Parameters, TimeBound, TimeExpr, TimeRange};
-use zenoh::time::Timestamp;
-use zenoh::{try_init_log_from_env, Error, Result as ZResult};
-use zenoh_backend_traits::config::{
-    PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
+use zenoh::{
+    bytes::Encoding,
+    internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value},
+    key_expr::{keyexpr, KeyExpr, OwnedKeyExpr},
+    query::{Parameters, TimeBound, TimeExpr, TimeRange},
+    time::Timestamp,
+    try_init_log_from_env, Error, Result as ZResult,
 };
-use zenoh_backend_traits::StorageInsertionResult;
-use zenoh_backend_traits::*;
+use zenoh_backend_traits::{
+    config::{PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig},
+    StorageInsertionResult, *,
+};
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 // Properties used by the Backend
@@ -922,8 +925,9 @@ fn clauses_from_parameters(p: &str) -> ZResult<String> {
 }
 
 fn write_timeexpr(s: &mut String, t: TimeExpr) {
-    use humantime::format_rfc3339;
     use std::fmt::Write;
+
+    use humantime::format_rfc3339;
     match t {
         TimeExpr::Fixed(t) => write!(s, "'{}'", format_rfc3339(t)),
         TimeExpr::Now { offset_secs } => write!(s, "now(){offset_secs:+}s"),
