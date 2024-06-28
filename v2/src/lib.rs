@@ -12,35 +12,39 @@
 //   ZettaScale Zenoh Team, <zenoh@zettascale.tech>
 //
 
+use std::{
+    convert::{TryFrom, TryInto},
+    str::FromStr,
+    time::{Duration, Instant, UNIX_EPOCH},
+};
+
 use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use chrono::{NaiveDateTime, SecondsFormat};
 use futures::prelude::*;
-use influxdb2::api::buckets::ListBucketsRequest;
-use influxdb2::models::Query;
-use influxdb2::models::{DataPoint, PostBucketRequest};
-use influxdb2::Client;
-use influxdb2::FromDataPoint;
-use std::convert::{TryFrom, TryInto};
-use std::str::FromStr;
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use influxdb2::{
+    api::buckets::ListBucketsRequest,
+    models::{DataPoint, PostBucketRequest, Query},
+    Client, FromDataPoint,
+};
 use uuid::Uuid;
-use zenoh::encoding::Encoding;
-use zenoh::internal::{
-    bail,
-    buffers::{SplitBuffer, ZBuf},
-    zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
+use zenoh::{
+    bytes::Encoding,
+    internal::{
+        bail,
+        buffers::{SplitBuffer, ZBuf},
+        zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
+    },
+    key_expr::{keyexpr, OwnedKeyExpr},
+    query::{Parameters, TimeExpr},
+    time::{new_timestamp, Timestamp},
+    try_init_log_from_env, Error, Result as ZResult,
 };
-use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
-use zenoh::selector::{Parameters, TimeExpr};
-use zenoh::time::{new_timestamp, Timestamp};
-use zenoh::{try_init_log_from_env, Error, Result as ZResult};
-use zenoh_backend_traits::config::{
-    PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
+use zenoh_backend_traits::{
+    config::{PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig},
+    StorageInsertionResult, *,
 };
-use zenoh_backend_traits::StorageInsertionResult;
-use zenoh_backend_traits::*;
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 // Properties used by the Backend
@@ -847,7 +851,7 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 }
 
 fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
-    use zenoh::selector::{TimeBound, TimeRange};
+    use zenoh::query::{TimeBound, TimeRange};
     let time_range = TimeRange::from_str(p);
     let mut result = String::new();
     match time_range {
