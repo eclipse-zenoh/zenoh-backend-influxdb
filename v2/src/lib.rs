@@ -27,14 +27,10 @@ use std::str::FromStr;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use uuid::Uuid;
 use zenoh::encoding::Encoding;
-use zenoh::internal::{
-    bail,
-    buffers::{SplitBuffer, ZBuf},
-    zerror, Timed, TimedEvent, TimedHandle, Timer, Value,
-};
+use zenoh::internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value};
 use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
 use zenoh::selector::{Parameters, TimeExpr};
-use zenoh::time::{new_timestamp, Timestamp};
+use zenoh::time::Timestamp;
 use zenoh::{try_init_log_from_env, Error, Result as ZResult};
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
@@ -702,17 +698,7 @@ impl Storage for InfluxDbStorage {
     async fn get_all_entries(&self) -> ZResult<Vec<(Option<OwnedKeyExpr>, Timestamp)>> {
         tracing::warn!("!!! get_all_entries is NOT implemented yet !!!"); // See : https://github.com/ZettaScaleLabs/zenoh-backend-influxdb/pull/4
         tracing::warn!("called get_all_entries in InfluxDBv2 storage");
-        let mut result: Vec<(Option<OwnedKeyExpr>, Timestamp)> = Vec::new();
-        // TODO: Pass real zid from session instead
-        let curr_time = match std::num::NonZeroU128::new(1u128).map(new_timestamp) {
-            Some(x) => x,
-            None => {
-                bail!("Error Creating Timestamp ID for 0x01");
-            }
-        };
-
-        result.push((None, curr_time));
-        return Ok(result);
+        return Ok(Vec::new());
     }
 }
 
