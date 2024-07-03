@@ -19,23 +19,24 @@ use influxdb::{
     Client, ReadQuery as InfluxRQuery, Timestamp as InfluxTimestamp, WriteQuery as InfluxWQuery,
 };
 use serde::Deserialize;
+use zenoh::key_expr::KeyExpr;
+use zenoh_backend_traits::{Capability, History, Persistence, Storage, StorageInsertionResult, StoredData, Volume, VolumeInstance};
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
-use zenoh::encoding::Encoding;
-use zenoh::internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value};
-use zenoh::key_expr::KeyExpr;
-use zenoh::key_expr::{keyexpr, OwnedKeyExpr};
-use zenoh::selector::{Parameters, TimeBound, TimeExpr, TimeRange};
-use zenoh::time::Timestamp;
-use zenoh::{try_init_log_from_env, Error, Result as ZResult};
+use zenoh::{
+    bytes::Encoding,
+    internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value},
+    key_expr::{keyexpr, OwnedKeyExpr},
+    query::{Parameters, TimeBound, TimeExpr, TimeRange},
+    time::Timestamp,
+    try_init_log_from_env, Error, Result as ZResult,
+};
 use zenoh_backend_traits::config::{
     PrivacyGetResult, PrivacyTransparentGet, StorageConfig, VolumeConfig,
 };
-use zenoh_backend_traits::StorageInsertionResult;
-use zenoh_backend_traits::*;
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
 
 // Properties used by the Backend
