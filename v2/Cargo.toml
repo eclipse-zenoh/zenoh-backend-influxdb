@@ -45,11 +45,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-zenoh = { workspace = true }
+zenoh = { workspace = true, features = ["unstable", "internal", "plugins"] }
 zenoh_backend_traits = { workspace = true }
-zenoh-collections = { workspace = true }
-zenoh-core = { workspace = true }
-zenoh-util = { workspace = true }
 zenoh-plugin-trait = { workspace = true }
 
 [build-dependencies]
