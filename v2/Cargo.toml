@@ -27,17 +27,19 @@ base64 = { workspace = true }
 chrono = { version = "0.4.31", features = ["serde"] }
 futures = "0.3.28"
 git-version = { workspace = true }
-# influxdb2 = { version = "0.5.0", features = [
+
+# TODO: Upon next release of influxdb2 crate
+# influxdb2 = { version = "0.5.1", features = [
 #     "rustls",
 # ], default-features = false }
 # influxdb2-derive = "0.1.1"
 # influxdb2-structmap = "0.2"
-# 
 # Derive and struct map need to also come from the same Repo as the macros are used here
 # Otherwise Cargo complaines Type T does not Match Type T because of its origin.
-influxdb2 = { git = "https://github.com/Charles-Schleich/influxdb2", branch = "fix/content_headers"}
-influxdb2-derive = { git = "https://github.com/Charles-Schleich/influxdb2", branch = "fix/content_headers" }
-influxdb2-structmap = { git = "https://github.com/Charles-Schleich/influxdb2", branch = "fix/content_headers" }
+influxdb2 = { git = "https://github.com/aprimadi/influxdb2", branch = "main"}
+influxdb2-derive = { git = "https://github.com/aprimadi/influxdb2", branch = "main" }
+influxdb2-structmap = { git = "https://github.com/aprimadi/influxdb2", branch = "main" }
+
 lazy_static = { workspace = true }
 num-traits = "0.2"
 rand = "0.8.5"

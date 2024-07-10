@@ -106,10 +106,6 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
         get_private_conf(config, PROP_BACKEND_ORG_ID)?,
         get_private_conf(config, PROP_TOKEN)?,
     ) {
-        // (Some(org_id), Some(token)) => Ok(Some(InfluxDbCredentials::Creds(
-        //     org_id.clone(),
-        //     token.clone(),
-        // ))),
         (Some(org_id), Some(token)) => Ok(Some(InfluxDbCredentials {
             org_id: org_id.clone(),
             token: token.clone(),
@@ -170,6 +166,7 @@ impl Plugin for InfluxDbBackend {
                     Ok(client) => client,
                     Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
                 };
+
                 match async_std::task::block_on(async { admin_client.ready().await }) {
                     Ok(res) => {
                         if !res {
@@ -203,6 +200,15 @@ pub struct InfluxDbVolume {
     admin_status: VolumeConfig,
     admin_client: Client,
     credentials: Option<InfluxDbCredentials>,
+}
+
+impl InfluxDbVolume {
+    async fn create_db(&self, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
+        let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
+        self.admin_client
+            .create_bucket(Some(post_bucket_options))
+            .await
+    }
 }
 
 #[async_trait]
@@ -279,7 +285,7 @@ impl Volume for InfluxDbVolume {
             Ok(db_exists) => {
                 if !db_exists && createdb {
                     // Try to create db using user credentials
-                    match create_db(&self.admin_client, &creds.org_id, &db).await {
+                    match self.create_db(&creds.org_id, &db).await {
                         Ok(_) => tracing::info!("Created {db} Influx"),
                         Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
                     }
@@ -383,7 +389,7 @@ impl influxdb2::FromMap for ZenohPoint {
             z_point.timestamp = timestamp.clone();
         };
         if let Some(V::Long(encoding_prefix)) = map.get("encoding_prefix") {
-            z_point.encoding_prefix = encoding_prefix.clone();
+            z_point.encoding_prefix = *encoding_prefix;
         };
         if let Some(V::String(encoding_suffix)) = map.get("encoding_suffix") {
             z_point.encoding_suffix = encoding_suffix.clone();
@@ -460,17 +466,6 @@ impl InfluxDbStorage {
         self.timer.add_async(event).await;
         handle
     }
-
-    // fn keyexpr_from_serie(&self, serie_name: &str) -> ZResult<Option<OwnedKeyExpr>> {
-    //     if serie_name.eq(NONE_KEY) {
-    //         Ok(None)
-    //     } else {
-    //         match OwnedKeyExpr::from_str(serie_name) {
-    //             Ok(key) => Ok(Some(key)),
-    //             Err(e) => Err(format!("{}", e).into()),
-    //         }
-    //     }
-    // }
 }
 
 #[async_trait]
@@ -555,7 +550,7 @@ impl Storage for InfluxDbStorage {
             timestamp.get_time().as_secs() as i64,
             timestamp.get_time().subsec_nanos(),
         )
-        .ok_or_else(|| zerror!("delete: stop_timestamp out of range"))?
+        .ok_or_else(|| zerror!("delete: stop_timestamp {timestamp} out of range"))?
         .naive_utc();
 
         let predicate = None; //can be specified with tag or field values
@@ -614,33 +609,34 @@ impl Storage for InfluxDbStorage {
     ) -> ZResult<Vec<StoredData>> {
         let owned_key = key.unwrap_or(self.none_key.clone());
 
-        let db = get_db_name(self.config.clone())?;
+        let db: String = get_db_name(self.config.clone())?;
+        let get_all = format!(
+            "from(bucket: \"{}\")
+                    |> range(start:0)
+                    |> filter(fn: (r) => r._measurement == \"{}\")
+                    |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
+                    |> last()
+                ",
+            db, &owned_key
+        );
 
-        #[allow(unused_assignments)]
-        let mut qs: String = String::new();
-        match timerange_from_parameters(parameters)? {
-            Some(range) => {
-                qs = format!(
-                    "from(bucket: \"{}\")
-                                            |> range({})
-                                            |> filter(fn: (r) => r._measurement == \"{}\")
-                                            |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
-                                        ",
-                    db, range, &owned_key
-                );
+        let qs: String = if parameters.is_empty() {
+            get_all
+        } else {
+            match timerange_from_parameters(parameters)? {
+                Some(range) => {
+                    format!(
+                        "from(bucket: \"{}\")
+                            |> range({})
+                            |> filter(fn: (r) => r._measurement == \"{}\")
+                            |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
+                        ",
+                        db, range, &owned_key
+                    )
+                }
+                None => get_all,
             }
-            None => {
-                qs = format!(
-                    "from(bucket: \"{}\")
-                                            |> range(start:0)
-                                            |> filter(fn: (r) => r._measurement == \"{}\")
-                                            |> filter(fn: (r) => r[\"kind\"] == \"PUT\")
-                                            |> last()
-                                        ",
-                    db, &owned_key
-                );
-            }
-        }
+        };
 
         tracing::debug!(
             "Get {:?} with Influx query:{} in InfluxDBv2 storage",
@@ -849,6 +845,7 @@ struct TimedMeasurementDrop {
 #[async_trait]
 impl Timed for TimedMeasurementDrop {
     async fn run(&mut self) {
+        tracing::warn!("`TimedMeasurementDrop`'s trait member `run` not implemented for influxdb2")
         //keeping the stub here for implemntation in a future time
         //currently the influxDB library doesn't allow dropping a measurement
     }
@@ -868,10 +865,10 @@ async fn does_db_exist(client: &Client, db: &str) -> ZResult<bool> {
         .is_some())
 }
 
-async fn create_db(client: &Client, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
-    let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
-    client.create_bucket(Some(post_bucket_options)).await
-}
+// async fn create_db(client: &Client, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
+//     let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
+//     client.create_bucket(Some(post_bucket_options)).await
+// }
 
 // Returns an InfluxDB regex (see https://docs.influxdata.com/influxdb/v1.8/query_language/explore-data/#regular-expressions)
 // corresponding to the list of path expressions. I.e.:
@@ -908,6 +905,7 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 
 fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
     use zenoh::query::{TimeBound, TimeRange};
+
     let time_range = TimeRange::from_str(p);
     let mut result = String::new();
     match time_range {
@@ -936,7 +934,7 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
             }
         }
         Err(err) => Err(zerror!(
-            "Could not Make TimeRange From string {}  Err :{}",
+            "Could not Make TimeRange From string '{}'  Err :{}",
             p,
             err
         ))?,
