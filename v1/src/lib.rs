@@ -419,8 +419,8 @@ impl Storage for InfluxDbStorage {
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
-        let encoding_string_rep = value.encoding().clone().to_string(); // add_field only supports Strings and not Vec<u8>
-        let encoding: Encoding = (value.encoding().clone()).into();
+        let encoding_string_rep = value.encoding().to_string(); // add_field only supports Strings and not Vec<u8>
+        let encoding: &Encoding = value.encoding();
 
         let query = InfluxWQuery::new(
             InfluxTimestamp::Nanoseconds(influx_time),
@@ -501,7 +501,7 @@ impl Storage for InfluxDbStorage {
         key: Option<OwnedKeyExpr>,
         parameters: &str,
     ) -> ZResult<Vec<StoredData>> {
-        let measurement = match key.clone() {
+        let measurement = match key {
             Some(k) => k,
             None => OwnedKeyExpr::from_str(NONE_KEY).unwrap(),
         };
@@ -527,7 +527,7 @@ impl Storage for InfluxDbStorage {
             base64: bool,
             value: String,
         }
-        debug!("Get {:?} with Influx query: {}", key, influx_query_str);
+        // debug!("Get {:?} with Influx query: {}", &key, influx_query_str);
         let mut result = Vec::new();
         match self.client.json_query(influx_query).await {
             Ok(mut query_result) => {
