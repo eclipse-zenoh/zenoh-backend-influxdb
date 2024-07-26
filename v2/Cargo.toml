@@ -52,4 +52,4 @@ maintainer = "zenoh-dev@eclipse.org"
 copyright = "2022 ZettaScale Technology"
 section = "net"
 license-file = ["../LICENSE", "0"]
-depends = "zenoh-plugin-storage-manager (=0.11.0-dev-1)"
+depends = "zenoh-plugin-storage-manager (=1.0.0~alpha.5-1)"
