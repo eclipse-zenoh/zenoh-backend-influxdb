@@ -428,7 +428,7 @@ impl Storage for InfluxDbStorage {
         )
         .add_tag("kind", "PUT")
         .add_field("timestamp", timestamp.to_string())
-        .add_field("encoding_prefix", u16::from(encoding.id()))
+        .add_field("encoding_prefix", encoding.id())
         .add_field("encoding_suffix", encoding_string_rep) // TODO: Rename To Encoding and only keep String rep
         .add_field("base64", base64)
         .add_field("value", strvalue);
@@ -551,13 +551,9 @@ impl Storage for InfluxDbStorage {
                                 // for each point
                                 for zpoint in serie.values {
                                     // get the encoding
-                                    let encoding_prefix: u16 =
-                                        zpoint.encoding_prefix.try_into().map_err(|_| {
-                                            zerror!("Unknown encoding {}", zpoint.encoding_prefix)
-                                        })?;
 
                                     let encoding = if zpoint.encoding_suffix.is_empty() {
-                                        Encoding::new(encoding_prefix, None)
+                                        Encoding::new(zpoint.encoding_prefix.into(), None)
                                     } else {
                                         Encoding::from(zpoint.encoding_suffix)
                                     };
