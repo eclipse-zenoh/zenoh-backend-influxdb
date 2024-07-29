@@ -4428,7 +4428,6 @@ dependencies = [
 name = "zenoh-backend-influxdb-v1"
 version = "0.11.0-dev"
 dependencies = [
- "async-std",
  "async-trait",
  "base64 0.21.7",
  "git-version",
@@ -4438,6 +4437,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "uuid",
  "zenoh",
@@ -4449,7 +4449,6 @@ dependencies = [
 name = "zenoh-backend-influxdb-v2"
 version = "0.11.0-dev"
 dependencies = [
- "async-std",
  "async-trait",
  "base64 0.21.7",
  "chrono",
@@ -4464,6 +4463,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_json",
+ "tokio",
  "tracing",
  "uuid",
  "zenoh",
