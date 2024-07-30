@@ -527,7 +527,7 @@ impl Storage for InfluxDbStorage {
             base64: bool,
             value: String,
         }
-        // debug!("Get {:?} with Influx query: {}", &key, influx_query_str);
+
         let mut result = Vec::new();
         match self.client.json_query(influx_query).await {
             Ok(mut query_result) => {
