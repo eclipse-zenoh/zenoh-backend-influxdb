@@ -218,7 +218,7 @@ impl Volume for InfluxDbVolume {
                 match volume_cfg.get(PROP_STORAGE_CREATE_DB) {
                     None | Some(serde_json::Value::Bool(false)) => false,
                     Some(serde_json::Value::Bool(true)) => true,
-                    Some(_) => todo!(),
+                    Some(v) => bail!("Invalid value for ${PROP_STORAGE_CREATE_DB} config property: ${v}, expected Bool"),
                 },
             ),
             None => (generate_db_name(), true),

@@ -194,6 +194,7 @@ impl Plugin for InfluxDbBackend {
 #[derive(Debug)]
 struct InfluxDbCredentials {
     org_id: String,
+
     token: String,
 }
 
@@ -251,7 +252,7 @@ impl Volume for InfluxDbVolume {
                 match volume_cfg.get(PROP_STORAGE_CREATE_DB) {
                     None | Some(serde_json::Value::Bool(false)) => false,
                     Some(serde_json::Value::Bool(true)) => true,
-                    Some(_) => todo!(),
+                    Some(v) => bail!("Invalid value for ${PROP_STORAGE_CREATE_DB} config property: ${v}, expected Bool"),
                 },
             ),
             None => (generate_db_name(), true),
@@ -895,67 +896,65 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
         return Ok(None);
     }
 
-    let time_range = TimeRange::from_str(p);
+    let TimeRange(start, stop) = TimeRange::from_str(p)?;
     let mut result = String::new();
-    match time_range {
-        Ok(TimeRange(start, stop)) => {
-            match start {
-                TimeBound::Inclusive(t) => {
-                    result.push_str("start:");
-                    write_timeexpr(&mut result, t, 0);
-                }
-                TimeBound::Exclusive(t) => {
-                    result.push_str("start:");
-                    write_timeexpr(&mut result, t, 1);
-                }
-                TimeBound::Unbounded => {}
-            }
-            match stop {
-                TimeBound::Inclusive(t) => {
-                    result.push_str(", stop:");
-                    write_timeexpr(&mut result, t, 1);
-                }
-                TimeBound::Exclusive(t) => {
-                    result.push_str(", stop:");
-                    write_timeexpr(&mut result, t, 0);
-                }
-                TimeBound::Unbounded => {}
-            }
+    match start {
+        TimeBound::Inclusive(t) => {
+            result.push_str("start:");
+            write_timeexpr(&mut result, t, 0)?;
         }
-        Err(err) => Err(zerror!(
-            "Could not Make TimeRange From string '{}'  Err :{}",
-            p,
-            err
-        ))?,
+        TimeBound::Exclusive(t) => {
+            result.push_str("start:");
+            write_timeexpr(&mut result, t, 1)?;
+        }
+        TimeBound::Unbounded => {}
+    }
+    match stop {
+        TimeBound::Inclusive(t) => {
+            result.push_str(", stop:");
+            write_timeexpr(&mut result, t, 1)?;
+        }
+        TimeBound::Exclusive(t) => {
+            result.push_str(", stop:");
+            write_timeexpr(&mut result, t, 0)?;
+        }
+        TimeBound::Unbounded => {}
     }
 
     Ok(Some(result))
 }
 
-fn write_timeexpr(s: &mut String, t: TimeExpr, i: u64) {
+fn write_timeexpr(s: &mut String, t: TimeExpr, i: u64) -> ZResult<()> {
     use std::fmt::Write;
     match t {
         TimeExpr::Fixed(t) => {
-            let time_duration = t.duration_since(UNIX_EPOCH).expect("Time went backwards")
+            let time_duration = t
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| zerror!("Time Expression Before UNIX_EPOCH"))?
                 + Duration::from_nanos(i); //adding 1ns for inclusive timebinding ;
+
+            // time_duration.sec
             let datetime = chrono::DateTime::from_timestamp(
                 time_duration
                     .as_secs()
                     .try_into()
-                    .expect("Error in converting seconds from u64 to i64"),
+                    .map_err(|_| zerror!("Error in converting seconds from u64 to i64"))?,
                 time_duration.subsec_nanos(),
             )
-            .expect("Error in converting duration to datetime");
+            .ok_or_else(|| zerror!("Could not create DateTime from Duration"))?;
+
             write!(
                 s,
                 "{}",
                 datetime.to_rfc3339_opts(SecondsFormat::Nanos, true)
             )
+            .map_err(|e| zerror!("Cannot write timestamp {e}"))?;
         }
         TimeExpr::Now { offset_secs } => {
             let os = offset_secs * 1e9 + i as f64; //adding 1ns for inclusive timebinding
             write!(s, "{}ns", os)
+                .map_err(|err| zerror!("Could not create DateTime from Duration {err} "))?;
         }
     }
-    .unwrap()
+    Ok(())
 }
