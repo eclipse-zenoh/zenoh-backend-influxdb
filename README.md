@@ -248,13 +248,13 @@ This is due to lack of support in Influxdb 2.x API for our approach.
 Examples of selectors:
 ```bash
   # get the complete time-series
-  /demo/example/**?_time=[..]
+  demo/example/**?_time=[..]
 
   # get points within a fixed date interval
-  /demo/example/influxdb/**?_time=[2020-01-01T00:00:00Z..2020-01-02T12:00:00.000000000Z]
+  demo/example/influxdb/**?_time=[2020-01-01T00:00:00Z..2020-01-02T12:00:00.000000000Z]
 
   # get points within a relative date interval
-  /demo/example/influxdb/**?_time=[now(-2d)..now(-1d)]
+  demo/example/influxdb/**?_time=[now(-2d)..now(-1d)]
 ```
 
 See the [`"_time"` RFC](https://github.com/eclipse-zenoh/roadmap/blob/main/rfcs/ALL/Selectors/_time.md) for a complete description of the time range format
