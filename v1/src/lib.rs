@@ -14,11 +14,11 @@
 
 use std::{
     convert::{TryFrom, TryInto},
+    future::Future,
     str::FromStr,
     time::{Duration, Instant},
 };
 
-use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use influxdb::{
@@ -40,6 +40,32 @@ use zenoh_backend_traits::{
     StorageInsertionResult, *,
 };
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
+
+const WORKER_THREAD_NUM: usize = 2;
+const MAX_BLOCK_THREAD_NUM: usize = 50;
+lazy_static::lazy_static! {
+    // The global runtime is used in the dynamic plugins, which we can't get the current runtime
+    static ref TOKIO_RUNTIME: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+               .worker_threads(WORKER_THREAD_NUM)
+               .max_blocking_threads(MAX_BLOCK_THREAD_NUM)
+               .enable_all()
+               .build()
+               .expect("Unable to create runtime");
+}
+#[inline(always)]
+fn blockon_runtime<F: Future>(task: F) -> F::Output {
+    // Check whether able to get the current runtime
+    match tokio::runtime::Handle::try_current() {
+        Ok(rt) => {
+            // Able to get the current runtime (standalone binary), spawn on the current runtime
+            tokio::task::block_in_place(|| rt.block_on(task))
+        }
+        Err(_) => {
+            // Unable to get the current runtime (dynamic plugins), spawn on the global runtime
+            tokio::task::block_in_place(|| TOKIO_RUNTIME.block_on(task))
+        }
+    }
+}
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -156,7 +182,7 @@ impl Plugin for InfluxDbBackend {
         };
 
         // Check connectivity to InfluxDB, trying to list databases
-        match async_std::task::block_on(async { show_databases(&admin_client).await }) {
+        match blockon_runtime(async { show_databases(&admin_client).await }) {
             Ok(dbs) => {
                 // trick: if "_internal" db is not shown, it means the credentials are not for an admin
                 if !dbs.iter().any(|e| e == "_internal") {
@@ -686,7 +712,7 @@ impl Drop for InfluxDbStorage {
         debug!("Closing InfluxDB storage");
         match self.on_closure {
             OnClosure::DropDb => {
-                task::block_on(async move {
+                blockon_runtime(async move {
                     let db = self.admin_client.database_name();
                     debug!("Close InfluxDB storage, dropping database {}", db);
                     let query = InfluxRQuery::new(format!(r#"DROP DATABASE "{db}""#));
@@ -696,7 +722,7 @@ impl Drop for InfluxDbStorage {
                 });
             }
             OnClosure::DropSeries => {
-                task::block_on(async move {
+                blockon_runtime(async move {
                     let db = self.client.database_name();
                     debug!(
                         "Close InfluxDB storage, dropping all series from database {}",

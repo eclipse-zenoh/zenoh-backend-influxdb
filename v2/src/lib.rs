@@ -18,7 +18,6 @@ use std::{
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
-use async_std::task;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use chrono::{NaiveDateTime, SecondsFormat};
@@ -41,6 +40,32 @@ use zenoh_backend_traits::{
     StorageInsertionResult, *,
 };
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
+
+const WORKER_THREAD_NUM: usize = 2;
+const MAX_BLOCK_THREAD_NUM: usize = 50;
+lazy_static::lazy_static! {
+    // The global runtime is used in the dynamic plugins, which we can't get the current runtime
+    static ref TOKIO_RUNTIME: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+               .worker_threads(WORKER_THREAD_NUM)
+               .max_blocking_threads(MAX_BLOCK_THREAD_NUM)
+               .enable_all()
+               .build()
+               .expect("Unable to create runtime");
+}
+#[inline(always)]
+fn blockon_runtime<F: Future>(task: F) -> F::Output {
+    // Check whether able to get the current runtime
+    match tokio::runtime::Handle::try_current() {
+        Ok(rt) => {
+            // Able to get the current runtime (standalone binary), spawn on the current runtime
+            tokio::task::block_in_place(|| rt.block_on(task))
+        }
+        Err(_) => {
+            // Unable to get the current runtime (dynamic plugins), spawn on the global runtime
+            tokio::task::block_in_place(|| TOKIO_RUNTIME.block_on(task))
+        }
+    }
+}
 
 // Properties used by the Backend
 pub const PROP_BACKEND_URL: &str = "url";
@@ -167,8 +192,7 @@ impl Plugin for InfluxDbBackend {
                     Ok(client) => client,
                     Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
                 };
-
-                match async_std::task::block_on(async { admin_client.ready().await }) {
+                match blockon_runtime(async { admin_client.ready().await }) {
                     Ok(res) => {
                         if !res {
                             bail!("InfluxDBv2 server is not ready! ")
@@ -795,7 +819,7 @@ impl Drop for InfluxDbStorage {
 
         match self.on_closure {
             OnClosure::DropDb => {
-                task::block_on(async move {
+                blockon_runtime(async move {
                     tracing::debug!("Close InfluxDBv2 storage, dropping database {}", db);
                     if let Err(e) = self.admin_client.delete_bucket(&db).await {
                         tracing::error!("Failed to drop InfluxDbv2 database '{}' : {}", db, e)
@@ -803,7 +827,7 @@ impl Drop for InfluxDbStorage {
                 });
             }
             OnClosure::DropSeries => {
-                task::block_on(async move {
+                blockon_runtime(async move {
                     tracing::debug!(
                         "Close InfluxDBv2 storage, dropping all series from database {}",
                         db
