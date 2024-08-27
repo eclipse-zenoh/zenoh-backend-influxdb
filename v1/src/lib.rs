@@ -52,6 +52,34 @@ lazy_static::lazy_static! {
                .build()
                .expect("Unable to create runtime");
 }
+
+
+// In the crate aws-sdk-s3, it tries to get the current runtime, but it will fail if we load the backend as a dynamic plugin.
+// In this case, we need to provide our own runtime to avoid the issue.
+#[macro_export]
+macro_rules! await_task {
+    ($e: expr, $($x:ident),*) => {
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => {
+                $e
+            },
+            Err(_) => {
+                // We need to clone all the variables used by async func
+                $(
+                    let $x = $x.clone();
+                )*
+                TOKIO_RUNTIME
+                    .spawn(
+                        async move { $e },
+                    )
+                    .await
+                    .map_err(|e| zerror!("Unable to spawn the task: {e}"))?
+            },
+        }
+    };
+}
+
+
 #[inline(always)]
 fn blockon_runtime<F: Future>(task: F) -> F::Output {
     // Check whether able to get the current runtime
@@ -61,6 +89,7 @@ fn blockon_runtime<F: Future>(task: F) -> F::Output {
             tokio::task::block_in_place(|| rt.block_on(task))
         }
         Err(_) => {
+            debug!("No handle");
             // Unable to get the current runtime (dynamic plugins), spawn on the global runtime
             tokio::task::block_in_place(|| TOKIO_RUNTIME.block_on(task))
         }
@@ -182,6 +211,7 @@ impl Plugin for InfluxDbBackend {
         };
 
         // Check connectivity to InfluxDB, trying to list databases
+        debug!("blockon_runtime show_databases");
         match blockon_runtime(async { show_databases(&admin_client).await }) {
             Ok(dbs) => {
                 // trick: if "_internal" db is not shown, it means the credentials are not for an admin
@@ -275,7 +305,10 @@ impl Volume for InfluxDbVolume {
         };
 
         // Check if the database exists (using storages credentials)
-        if !is_db_existing(&client, &db).await? {
+        debug!("create_storage is_db_existing");
+        let client_clone = client.clone();
+        let db_name = db.clone();
+        if !await_task!(is_db_existing(&client_clone, &db_name).await,)? {
             if createdb {
                 // create db using backend's credentials
                 create_db(&self.admin_client, &db, storage_username).await?;
@@ -816,7 +849,7 @@ async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
     }
     let query = InfluxRQuery::new("SHOW DATABASES");
     debug!("List databases with Influx query: {:?}", query);
-    match client.json_query(query).await {
+    match await_task!(client.json_query(query).await,client) {
         Ok(mut result) => match result.deserialize_next::<Database>() {
             Ok(dbs) => {
                 let mut result: Vec<String> = Vec::new();
@@ -855,7 +888,7 @@ async fn create_db(
             e
         )
     }
-
+    debug!("after await: {}", db_name);
     // is a username is specified for storage access, grant him access to the database
     if let Some(username) = storage_username {
         let query = InfluxRQuery::new(format!(r#"GRANT ALL ON "{db_name}" TO "{username}""#));
