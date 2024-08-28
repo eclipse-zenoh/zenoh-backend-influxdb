@@ -54,25 +54,16 @@ lazy_static::lazy_static! {
 }
 
 #[macro_export]
-macro_rules! await_task {
-    ($e: expr, $($x:ident),*) => {
+macro_rules! spawn_task {
+    ($e: expr) => {
         match tokio::runtime::Handle::try_current() {
-            Ok(_) => {
-                $e
+            Ok(handle) => {
+                handle.spawn($e)
             },
             Err(_) => {
-                // We need to clone all the variables used by async func
-                $(
-                    let $x = $x.clone();
-                )*
-                TOKIO_RUNTIME
-                    .spawn(
-                        async move { $e },
-                    )
-                    .await
-                    .map_err(|e| zerror!("Unable to spawn the task: {e}"))?
+                TOKIO_RUNTIME.spawn($e)
             },
-        }
+        };
     };
 }
 
@@ -408,13 +399,14 @@ impl InfluxDbStorage {
     async fn schedule_measurement_drop(&self, measurement: &str) -> ZResult<()> {
         let m_string = measurement.to_string();
         let cloned_client = self.client.clone();
-        await_task! {
+        spawn_task!( async {
             {
                 if let Err(_) = tokio::time::timeout(Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS), std::future::pending::<u8>()).await {
                     drop_measurement(m_string, cloned_client).await;
                 }
-            },m_string, cloned_client
-        }
+            }
+        });
+
         debug!("end schedule_measurement_drop {:?}", Instant::now());
         Ok(())
     }
