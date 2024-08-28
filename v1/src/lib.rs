@@ -29,7 +29,7 @@ use tracing::{debug, error, warn};
 use uuid::Uuid;
 use zenoh::{
     bytes::Encoding,
-    internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value},
+    internal::{bail, buffers::ZBuf, zerror, Value},
     key_expr::{keyexpr, KeyExpr, OwnedKeyExpr},
     query::{Parameters, TimeBound, TimeExpr, TimeRange},
     time::Timestamp,
@@ -53,9 +53,6 @@ lazy_static::lazy_static! {
                .expect("Unable to create runtime");
 }
 
-
-// In the crate aws-sdk-s3, it tries to get the current runtime, but it will fail if we load the backend as a dynamic plugin.
-// In this case, we need to provide our own runtime to avoid the issue.
 #[macro_export]
 macro_rules! await_task {
     ($e: expr, $($x:ident),*) => {
@@ -68,7 +65,6 @@ macro_rules! await_task {
                 $(
                     let $x = $x.clone();
                 )*
-                println!("Run Tokio Runtime");
                 TOKIO_RUNTIME
                     .spawn(
                         async move { $e },
@@ -79,7 +75,6 @@ macro_rules! await_task {
         }
     };
 }
-
 
 #[inline(always)]
 fn blockon_runtime<F: Future>(task: F) -> F::Output {
@@ -306,10 +301,9 @@ impl Volume for InfluxDbVolume {
         };
 
         // Check if the database exists (using storages credentials)
-        debug!("create_storage is_db_existing");
         let client_clone = client.clone();
         let db_name = db.clone();
-        if !await_task!(is_db_existing(&client_clone, &db_name).await,)? {
+        if !is_db_existing(&client_clone, &db_name).await? {
             if createdb {
                 // create db using backend's credentials
                 create_db(&self.admin_client, &db, storage_username).await?;
@@ -337,7 +331,6 @@ impl Volume for InfluxDbVolume {
             admin_client,
             client,
             on_closure,
-            timer: Timer::default(),
         }))
     }
 }
@@ -371,7 +364,6 @@ struct InfluxDbStorage {
     admin_client: Client,
     client: Client,
     on_closure: OnClosure,
-    timer: Timer,
 }
 
 impl InfluxDbStorage {
@@ -415,17 +407,18 @@ impl InfluxDbStorage {
         }
     }
 
-    async fn schedule_measurement_drop(&self, measurement: &str) -> TimedHandle {
-        let event = TimedEvent::once(
-            Instant::now() + Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS),
-            TimedMeasurementDrop {
-                client: self.admin_client.clone(),
-                measurement: measurement.to_string(),
-            },
-        );
-        let handle = event.get_handle();
-        self.timer.add_async(event).await;
-        handle
+    async fn schedule_measurement_drop(&self, measurement: &str) -> ZResult<()> {
+        let m_string = measurement.to_string();
+        let cloned_client = self.client.clone();
+        await_task! {
+            {
+                if let Err(_) = tokio::time::timeout(Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS), std::future::pending::<u8>()).await {
+                    drop_measurement(m_string, cloned_client).await;
+                }
+            },m_string, cloned_client
+        }
+        debug!("end schedule_measurement_drop {:?}", Instant::now());
+        Ok(())
     }
 
     fn keyexpr_from_serie(&self, serie_name: &str) -> ZResult<Option<OwnedKeyExpr>> {
@@ -552,7 +545,7 @@ impl Storage for InfluxDbStorage {
             )
         }
         // schedule the drop of measurement later in the future, if it's empty
-        let _ = self.schedule_measurement_drop(measurement.as_str()).await;
+        self.schedule_measurement_drop(measurement.as_str()).await?;
         Ok(StorageInsertionResult::Deleted)
     }
 
@@ -781,61 +774,54 @@ impl Drop for InfluxDbStorage {
     }
 }
 
-// Scheduled dropping of a measurement after a timeout, if it's empty
-struct TimedMeasurementDrop {
-    client: Client,
-    measurement: String,
-}
+async fn drop_measurement(measurement: String, client: Client) {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct QueryResult {
+        kind: String,
+    }
 
-#[async_trait]
-impl Timed for TimedMeasurementDrop {
-    async fn run(&mut self) {
-        #[derive(Deserialize, Debug, PartialEq)]
-        struct QueryResult {
-            kind: String,
-        }
-
-        // check if there is at least 1 point without "DEL" kind in the measurement
-        let query = InfluxRQuery::new(format!(
-            r#"SELECT "kind" FROM "{}" WHERE kind!='DEL' LIMIT 1"#,
-            self.measurement
-        ));
-        match self.client.json_query(query).await {
-            Ok(mut result) => match result.deserialize_next::<QueryResult>() {
+    // check if there is at least 1 point without "DEL" kind in the measurement
+    let query = InfluxRQuery::new(format!(
+        r#"SELECT "kind" FROM "{}" WHERE kind!='DEL' LIMIT 1"#,
+        measurement
+    ));
+    match client.json_query(query).await {
+        Ok(mut result) => {
+            match result.deserialize_next::<QueryResult>() {
                 Ok(qr) => {
                     if !qr.series.is_empty() {
-                        debug!("Measurement {} contains new values inserted after deletion; don't drop it", self.measurement);
+                        debug!("Measurement {} contains new values inserted after deletion; don't drop it", measurement);
                         return;
                     }
                 }
                 Err(e) => {
                     warn!(
                         "Failed to check if measurement '{}' is empty (can't drop it) : {}",
-                        self.measurement, e
+                        measurement, e
                     );
                 }
-            },
-            Err(e) => {
-                warn!(
-                    "Failed to check if measurement '{}' is empty (can't drop it) : {}",
-                    self.measurement, e
-                );
-                return;
             }
         }
-
-        // drop the measurement
-        let query = InfluxRQuery::new(format!(r#"DROP MEASUREMENT "{}""#, self.measurement));
-        debug!(
-            "Drop measurement {} after timeout with Influx query: {:?}",
-            self.measurement, query
-        );
-        if let Err(e) = self.client.query(&query).await {
+        Err(e) => {
             warn!(
-                "Failed to drop measurement '{}' from InfluxDb storage : {}",
-                self.measurement, e
+                "Failed to check if measurement '{}' is empty (can't drop it) : {}",
+                measurement, e
             );
+            return;
         }
+    }
+
+    // drop the measurement
+    let query = InfluxRQuery::new(format!(r#"DROP MEASUREMENT "{}""#, measurement));
+    debug!(
+        "Drop measurement {} after timeout with Influx query: {:?}",
+        measurement, query
+    );
+    if let Err(e) = client.query(&query).await {
+        warn!(
+            "Failed to drop measurement '{}' from InfluxDb storage : {}",
+            measurement, e
+        );
     }
 }
 
@@ -850,19 +836,7 @@ async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
     }
     let query = InfluxRQuery::new("SHOW DATABASES");
     debug!("List databases with Influx query: {:?}", query);
-
-
-    let res = match tokio::runtime::Handle::try_current(){
-        Ok(h) => {
-            debug!("Handle Exists");
-            client.json_query(query).await
-            // h.block_on(client.json_query(query))
-        },
-        Err(none) => panic!("NO Handle Exists"),
-    };
-
-    // debug!("Tokio Runtime Enter Guard {:?}", enter_guard);
-    match res {
+    match client.json_query(query).await {
         Ok(mut result) => match result.deserialize_next::<Database>() {
             Ok(dbs) => {
                 let mut result: Vec<String> = Vec::new();
