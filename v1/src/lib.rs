@@ -68,6 +68,7 @@ macro_rules! await_task {
                 $(
                     let $x = $x.clone();
                 )*
+                println!("Run Tokio Runtime");
                 TOKIO_RUNTIME
                     .spawn(
                         async move { $e },
@@ -849,7 +850,19 @@ async fn show_databases(client: &Client) -> ZResult<Vec<String>> {
     }
     let query = InfluxRQuery::new("SHOW DATABASES");
     debug!("List databases with Influx query: {:?}", query);
-    match await_task!(client.json_query(query).await,client) {
+
+
+    let res = match tokio::runtime::Handle::try_current(){
+        Ok(h) => {
+            debug!("Handle Exists");
+            client.json_query(query).await
+            // h.block_on(client.json_query(query))
+        },
+        Err(none) => panic!("NO Handle Exists"),
+    };
+
+    // debug!("Tokio Runtime Enter Guard {:?}", enter_guard);
+    match res {
         Ok(mut result) => match result.deserialize_next::<Database>() {
             Ok(dbs) => {
                 let mut result: Vec<String> = Vec::new();
