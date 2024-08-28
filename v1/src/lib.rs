@@ -57,12 +57,8 @@ lazy_static::lazy_static! {
 macro_rules! spawn_task {
     ($e: expr) => {
         match tokio::runtime::Handle::try_current() {
-            Ok(handle) => {
-                handle.spawn($e)
-            },
-            Err(_) => {
-                TOKIO_RUNTIME.spawn($e)
-            },
+            Ok(handle) => handle.spawn($e),
+            Err(_) => TOKIO_RUNTIME.spawn($e),
         };
     };
 }
@@ -76,7 +72,6 @@ fn blockon_runtime<F: Future>(task: F) -> F::Output {
             tokio::task::block_in_place(|| rt.block_on(task))
         }
         Err(_) => {
-            debug!("No handle");
             // Unable to get the current runtime (dynamic plugins), spawn on the global runtime
             tokio::task::block_in_place(|| TOKIO_RUNTIME.block_on(task))
         }
@@ -198,7 +193,6 @@ impl Plugin for InfluxDbBackend {
         };
 
         // Check connectivity to InfluxDB, trying to list databases
-        debug!("blockon_runtime show_databases");
         match blockon_runtime(async { show_databases(&admin_client).await }) {
             Ok(dbs) => {
                 // trick: if "_internal" db is not shown, it means the credentials are not for an admin
@@ -399,9 +393,14 @@ impl InfluxDbStorage {
     async fn schedule_measurement_drop(&self, measurement: &str) -> ZResult<()> {
         let m_string = measurement.to_string();
         let cloned_client = self.client.clone();
-        spawn_task!( async {
+        spawn_task!(async {
             {
-                if let Err(_) = tokio::time::timeout(Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS), std::future::pending::<u8>()).await {
+                if let Err(_) = tokio::time::timeout(
+                    Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS),
+                    std::future::pending::<u8>(),
+                )
+                .await
+                {
                     drop_measurement(m_string, cloned_client).await;
                 }
             }
