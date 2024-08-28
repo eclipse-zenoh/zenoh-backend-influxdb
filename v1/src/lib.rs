@@ -301,9 +301,7 @@ impl Volume for InfluxDbVolume {
         };
 
         // Check if the database exists (using storages credentials)
-        let client_clone = client.clone();
-        let db_name = db.clone();
-        if !is_db_existing(&client_clone, &db_name).await? {
+        if !is_db_existing(&client, &db).await? {
             if createdb {
                 // create db using backend's credentials
                 create_db(&self.admin_client, &db, storage_username).await?;
