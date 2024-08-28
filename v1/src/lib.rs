@@ -390,7 +390,7 @@ impl InfluxDbStorage {
         }
     }
 
-    async fn schedule_measurement_drop(&self, measurement: &str) -> ZResult<()> {
+    async fn schedule_measurement_drop(&self, measurement: &str) {
         let m_string = measurement.to_string();
         let cloned_client = self.client.clone();
         spawn_task!(async {
@@ -405,9 +405,6 @@ impl InfluxDbStorage {
                 }
             }
         });
-
-        debug!("end schedule_measurement_drop {:?}", Instant::now());
-        Ok(())
     }
 
     fn keyexpr_from_serie(&self, serie_name: &str) -> ZResult<Option<OwnedKeyExpr>> {
@@ -534,7 +531,7 @@ impl Storage for InfluxDbStorage {
             )
         }
         // schedule the drop of measurement later in the future, if it's empty
-        self.schedule_measurement_drop(measurement.as_str()).await?;
+        self.schedule_measurement_drop(measurement.as_str()).await;
         Ok(StorageInsertionResult::Deleted)
     }
 
