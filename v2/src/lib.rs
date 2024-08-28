@@ -15,7 +15,7 @@
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -29,7 +29,7 @@ use influxdb2::{
 use uuid::Uuid;
 use zenoh::{
     bytes::Encoding,
-    internal::{bail, buffers::ZBuf, zerror, Timed, TimedEvent, TimedHandle, Timer, Value},
+    internal::{bail, buffers::ZBuf, zerror, Value},
     key_expr::{keyexpr, OwnedKeyExpr},
     query::{Parameters, TimeExpr},
     time::Timestamp,
@@ -52,6 +52,30 @@ lazy_static::lazy_static! {
                .build()
                .expect("Unable to create runtime");
 }
+
+#[macro_export]
+macro_rules! await_task {
+    ($e: expr, $($x:ident),*) => {
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => {
+                $e
+            },
+            Err(_) => {
+                // We need to clone all the variables used by async func
+                $(
+                    let $x = $x.clone();
+                )*
+                TOKIO_RUNTIME
+                    .spawn(
+                        async move { $e },
+                    )
+                    .await
+                    .map_err(|e| zerror!("Unable to spawn the task: {e}"))?
+            },
+        }
+    };
+}
+
 #[inline(always)]
 fn blockon_runtime<F: Future>(task: F) -> F::Output {
     // Check whether able to get the current runtime
@@ -81,7 +105,7 @@ pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
 pub const NONE_KEY: &str = "@@none_key@@";
 
 // delay after deletion to drop a measurement
-const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
+// const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 
 lazy_static::lazy_static!(
     static ref INFLUX_REGEX_ALL: String = key_exprs_to_influx_regex(&["**".try_into().unwrap()]);
@@ -306,7 +330,9 @@ impl Volume for InfluxDbVolume {
             Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
         };
 
-        match does_db_exist(&client, &db).await {
+        let client_cloned = client.clone();
+        let db_cloned = db.clone();
+        match await_task!(does_db_exist(&client_cloned, &db_cloned).await,) {
             Ok(db_exists) => {
                 if !db_exists && createdb {
                     // Try to create db using user credentials
@@ -352,7 +378,6 @@ impl Volume for InfluxDbVolume {
             admin_client,
             client,
             on_closure,
-            timer: Timer::default(),
         }))
     }
 }
@@ -441,7 +466,6 @@ struct InfluxDbStorage {
     admin_client: Client,
     client: Client,
     on_closure: OnClosure,
-    timer: Timer,
 }
 
 impl InfluxDbStorage {
@@ -477,19 +501,6 @@ impl InfluxDbStorage {
             },
             None => Ok(None),
         }
-    }
-
-    async fn schedule_measurement_drop(&self, measurement: &str) -> TimedHandle {
-        let event = TimedEvent::once(
-            Instant::now() + Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS),
-            TimedMeasurementDrop {
-                client: self.admin_client.clone(),
-                measurement: measurement.to_string(),
-            },
-        );
-        let handle = event.get_handle();
-        self.timer.add_async(event).await;
-        handle
     }
 }
 
@@ -578,10 +589,10 @@ impl Storage for InfluxDbStorage {
         .ok_or_else(|| zerror!("delete: stop_timestamp {timestamp} out of range"))?
         .naive_utc();
 
-        let predicate = None; //can be specified with tag or field values
+        let predicate = Some(format!("_measurement=\"{measurement}\"")); //can be specified with tag or field values
         tracing::debug!(
-            "Delete {:?} with Influx query in InfluxDBv2 storage",
-            measurement
+            "Delete {:?} with Influx query in InfluxDBv2 storage, Time Range: {:?} - {:?}, Predicate: {:?}",
+            measurement, start_timestamp, stop_timestamp, predicate
         );
         if let Err(e) = self
             .client
@@ -625,9 +636,9 @@ impl Storage for InfluxDbStorage {
                 e
             )
         }
+
         // schedule_measurement_drop is used to schedule the drop of measurement later in the future, if it's empty
         // influx 2.x doesn't support dropping measurements from the API
-        let _ = self.schedule_measurement_drop(measurement.as_str()).await;
         Ok(StorageInsertionResult::Deleted)
     }
 
@@ -672,8 +683,10 @@ impl Storage for InfluxDbStorage {
         );
 
         let query = Query::new(query_string);
-        let query_result: Vec<ZenohPoint> = match self.client.query::<ZenohPoint>(Some(query)).await
-        {
+        let client = self.client.clone();
+        let res = await_task!(client.query::<ZenohPoint>(Some(query)).await,);
+
+        let query_result: Vec<ZenohPoint> = match res {
             Ok(result) => result,
             Err(e) => {
                 tracing::error!(
@@ -847,22 +860,6 @@ impl Drop for InfluxDbStorage {
                 tracing::debug!("Close InfluxDBv2 storage, keeping database {} as it is", db);
             }
         }
-    }
-}
-
-// Scheduled dropping of a measurement after a timeout, if it's empty
-#[allow(dead_code)]
-struct TimedMeasurementDrop {
-    client: Client,
-    measurement: String,
-}
-
-#[async_trait]
-impl Timed for TimedMeasurementDrop {
-    async fn run(&mut self) {
-        tracing::warn!("`TimedMeasurementDrop`'s trait member `run` not implemented for influxdb2")
-        //keeping the stub here for implemntation in a future time
-        //currently the influxDB library doesn't allow dropping a measurement
     }
 }
 
