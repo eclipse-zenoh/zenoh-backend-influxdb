@@ -388,14 +388,8 @@ impl InfluxDbStorage {
         // When this plugin executes as a dynamically loaded plugin,
         // the zenohd tokio-runtime is unavailable, therefore the plugin's runtime must be invoked
         let async_drop = async {
-            if let Err(_) = tokio::time::timeout(
-                Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS),
-                std::future::pending::<u8>(),
-            )
-            .await
-            {
-                drop_measurement(m_string, cloned_client).await;
-            }
+            tokio::time::sleep(Duration::from_millis(DROP_MEASUREMENT_TIMEOUT_MS)).await;
+            drop_measurement(m_string, cloned_client).await;
         };
 
         match tokio::runtime::Handle::try_current() {
