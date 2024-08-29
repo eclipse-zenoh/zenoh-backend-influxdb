@@ -16,7 +16,7 @@ use std::{
     convert::{TryFrom, TryInto},
     future::Future,
     str::FromStr,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use async_trait::async_trait;
