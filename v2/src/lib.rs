@@ -15,6 +15,7 @@
 use std::{
     convert::{TryFrom, TryInto},
     str::FromStr,
+    sync::Arc,
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -103,9 +104,6 @@ pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
 
 // Special key for None (when the prefix being stripped exactly matches the key)
 pub const NONE_KEY: &str = "@@none_key@@";
-
-// delay after deletion to drop a measurement
-// const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
 
 lazy_static::lazy_static!(
     static ref INFLUX_REGEX_ALL: String = key_exprs_to_influx_regex(&["**".try_into().unwrap()]);
@@ -376,7 +374,7 @@ impl Volume for InfluxDbVolume {
             db_name,
             config,
             admin_client,
-            client,
+            client: Arc::new(client),
             on_closure,
         }))
     }
@@ -464,7 +462,7 @@ struct InfluxDbStorage {
     db_name: String,
     config: StorageConfig,
     admin_client: Client,
-    client: Client,
+    client: Arc<Client>,
     on_closure: OnClosure,
 }
 
