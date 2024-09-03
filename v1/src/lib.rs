@@ -13,10 +13,11 @@
 //
 
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     future::Future,
     str::FromStr,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -79,12 +80,17 @@ pub const PROP_STORAGE_CREATE_DB: &str = "create_db";
 pub const PROP_STORAGE_ON_CLOSURE: &str = "on_closure";
 pub const PROP_STORAGE_USERNAME: &str = PROP_BACKEND_USERNAME;
 pub const PROP_STORAGE_PASSWORD: &str = PROP_BACKEND_PASSWORD;
+pub const PROP_STORAGE_PUT_BATCH_SIZE: &str = "put_batch_size";
+pub const PROP_STORAGE_PUT_BATCH_TIMEOUT_MS: &str = "put_batch_timeout_ms";
 
 // Special key for None (when the prefix being stripped exactly matches the key)
 pub const NONE_KEY: &str = "@@none_key@@";
 
 // delay after deletion to drop a measurement
 const DROP_MEASUREMENT_TIMEOUT_MS: u64 = 5000;
+
+// default batch timeout
+const DEFAULT_BATCH_TIMEOUT_MS: u64 = 1000;
 
 lazy_static::lazy_static!(
     static ref INFLUX_REGEX_ALL: String = key_exprs_to_influx_regex(&["**".try_into().unwrap()]);
@@ -226,6 +232,19 @@ impl Volume for InfluxDbVolume {
             Some(v) => v,
             None => bail!("InfluxDB backed storages need some volume-specific configuration"),
         };
+
+        // batching
+        let put_batch_size: Option<usize> = match volume_cfg.get(PROP_STORAGE_PUT_BATCH_SIZE) {
+            Some(v) => v.as_u64().map(|v| v as usize),
+            None => None,
+        };
+        let put_batch_timeout_ms = match volume_cfg.get(PROP_STORAGE_PUT_BATCH_TIMEOUT_MS) {
+            Some(v) => v.as_u64().unwrap_or(DEFAULT_BATCH_TIMEOUT_MS),
+            None => DEFAULT_BATCH_TIMEOUT_MS,
+        };
+
+        let put_batch_timeout = Duration::from_millis(put_batch_timeout_ms);
+
         let on_closure = match volume_cfg.get(PROP_STORAGE_ON_CLOSURE) {
             Some(serde_json::Value::String(x)) if x == "drop_series" => OnClosure::DropSeries,
             Some(serde_json::Value::String(x)) if x == "drop_db" => OnClosure::DropDb,
@@ -299,11 +318,106 @@ impl Volume for InfluxDbVolume {
             admin_client = admin_client.with_auth(username, password);
         }
 
+        // Collect PUT requests and send in batches for efficiency?
+        let put_batch_tx = if let Some(put_batch_size) = put_batch_size {
+            debug!(
+                "[{}] PUT queries will be sent in batches of {} or after {:#?}",
+                config.name, put_batch_size, put_batch_timeout
+            );
+
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Put>();
+
+            let client_clone = client.clone();
+            let name_clone = config.name.clone();
+            tokio::spawn(async move {
+                let mut put_batch: Vec<InfluxWQuery> = Vec::new();
+                let mut measurement_counts: HashMap<OwnedKeyExpr, u64> = HashMap::new();
+
+                let mut batch_start_time = Instant::now();
+                loop {
+                    if put_batch.is_empty() {
+                        // waiting for first batch item...
+                        match rx.recv().await {
+                            Some(Put { query, measurement }) => {
+                                // begin batch...
+                                put_batch.push(query);
+                                measurement_counts
+                                    .entry(measurement)
+                                    .and_modify(|counter| *counter += 1)
+                                    .or_insert(1);
+                                batch_start_time = Instant::now();
+                            }
+                            None => {
+                                debug!("[{}] batch put channel closed, exiting task", name_clone,);
+                                break;
+                            }
+                        }
+                    } else {
+                        // ...and wait for more items
+                        match tokio::time::timeout(Duration::from_millis(100), rx.recv()).await {
+                            Ok(r) => match r {
+                                Some(Put { query, measurement }) => {
+                                    // add to batch
+                                    put_batch.push(query);
+                                    measurement_counts
+                                        .entry(measurement)
+                                        .and_modify(|counter| *counter += 1)
+                                        .or_insert(1);
+                                }
+                                None => {
+                                    debug!(
+                                        "[{}] batch put channel closed, exiting task",
+                                        name_clone
+                                    );
+                                    break;
+                                }
+                            },
+                            Err(_) => {
+                                // timeout
+                            }
+                        };
+
+                        let batch_full = put_batch.len() >= put_batch_size;
+                        let batch_timed_out = batch_start_time.elapsed() > put_batch_timeout;
+
+                        if batch_full || batch_timed_out {
+                            let n = put_batch.len();
+
+                            let counts: Vec<String> = measurement_counts
+                                .drain()
+                                .map(|(k, v)| format!("{k} x {v}"))
+                                .collect();
+                            debug!(
+                                "[{}] PUT batch of {} - {}",
+                                name_clone,
+                                n,
+                                counts.join(", ")
+                            );
+                            let result = client_clone.query(&put_batch).await;
+                            put_batch.clear();
+
+                            if let Err(e) = result {
+                                debug!(
+                                    "[{}] Failed to put Value for batch of {} in InfluxDb storage : {}", name_clone,
+                                    n, e
+                                )
+                            }
+                        }
+                    }
+                }
+            });
+
+            Some(tx)
+        } else {
+            None
+        };
+
         Ok(Box::new(InfluxDbStorage {
             config,
             admin_client,
             client,
             on_closure,
+            put_batch_tx,
         }))
     }
 }
@@ -332,11 +446,17 @@ impl TryFrom<&Parameters<'_>> for OnClosure {
     }
 }
 
+struct Put {
+    measurement: OwnedKeyExpr,
+    query: InfluxWQuery,
+}
+
 struct InfluxDbStorage {
     config: StorageConfig,
     admin_client: Client,
     client: Client,
     on_closure: OnClosure,
+    put_batch_tx: Option<tokio::sync::mpsc::UnboundedSender<Put>>,
 }
 
 impl InfluxDbStorage {
@@ -463,15 +583,30 @@ impl Storage for InfluxDbStorage {
         .add_field("base64", base64)
         .add_field("value", strvalue);
 
-        debug!("Put {:?} with Influx query: {:?}", measurement, query);
-        if let Err(e) = self.client.query(&query).await {
-            bail!(
-                "Failed to put Value for {:?} in InfluxDb storage : {}",
-                measurement,
-                e
-            )
-        } else {
-            Ok(StorageInsertionResult::Inserted)
+        match &self.put_batch_tx {
+            None => {
+                // not batched - send query nows
+                debug!("Put {:?} with Influx query: {:?}", measurement, query);
+                if let Err(e) = self.client.query(&query).await {
+                    bail!(
+                        "Failed to put Value for {:?} in InfluxDb storage : {}",
+                        measurement,
+                        e
+                    )
+                } else {
+                    Ok(StorageInsertionResult::Inserted)
+                }
+            }
+            Some(sender) => {
+                let put = Put { query, measurement };
+                if let Err(e) = sender.send(put) {
+                    bail!("Failed to send to batch queue for InfluxDb storage : {}", e)
+                } else {
+                    // assume success
+                    // TODO - add pending status
+                    Ok(StorageInsertionResult::Inserted)
+                }
+            }
         }
     }
 
