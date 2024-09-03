@@ -585,7 +585,7 @@ impl Storage for InfluxDbStorage {
 
         match &self.put_batch_tx {
             None => {
-                // not batched - send query nows
+                // not batched - send query now
                 debug!("Put {:?} with Influx query: {:?}", measurement, query);
                 if let Err(e) = self.client.query(&query).await {
                     bail!(
