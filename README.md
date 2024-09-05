@@ -199,6 +199,11 @@ Storages relying on a `influxdb` backed volume may have additional configuration
   - `"drop_db"`: the database is dropped (i.e. removed)
   - `"drop_series"`: all the series (measurements) are dropped and the database remains empty. This is currently not supported in v2.
 
+#### for v1.x
+- **`put_batch_size`** (optional, integer): maximum number of data points per PUT request.
+
+- **`put_batch_timeout_ms`** (optional, integer): milliseconds before sending a batch if not full, default 1000ms.
+
 ### Volume-specific user credentials:
 #### for v1.x
 

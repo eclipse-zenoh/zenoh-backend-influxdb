@@ -198,6 +198,11 @@ Storages relying on a `influxdb` backed volume may have additional configuration
 
 - **`"token"`** (optional, string) :  an InfluxDB access token, usually [non-admin](https://docs.influxdata.com/influxdb/cloud/admin/tokens/#readwrite-token). It will be used to read/write points in the database on GET/PUT/DELETE zenoh operations.
 
+#### for v1.x
+- **`put_batch_size`** (optional, integer): maximum number of data points per PUT request.
+
+- **`put_batch_timeout_ms`** (optional, integer): milliseconds before sending a batch if not full, default 1000ms.
+
 -------------------------------
 ## **Behaviour of the backend**
 
