@@ -1,0 +1,47 @@
+{
+  plugins: {
+    // configuration of "storage_manager" plugin:
+    storage_manager: {
+      volumes: {
+        // configuration of a "influxdb" volume (the "zenoh_backend_influxdb" backend library will be loaded at startup)
+        // this should be named influxdb for v1 and influxdb2 for v2
+        influxdb: {
+          // URL to the InfluxDB services
+          url: "http://localhost:8086",
+          private: {
+            // If needed: InfluxDB credentials, preferably admin for databases creation and drop
+            username: "admin",
+            password: "password"
+          }
+        }
+      },
+      storages: {
+        // configuration of a "demo" storage using the "influxdb" volume
+        demo: {
+          // the key expression this storage will subscribe to
+          key_expr: "demo/example/**",
+          // this prefix will be stripped from the received key when converting to database key.
+          // i.e.: "demo/example/a/b" will be stored as "a/b"
+          // this option is optional
+          strip_prefix: "demo/example",
+          volume: {
+            // this will be influxdb for v1 and influxdb2 for v2 (exactly the same name as in volumes section)
+            id: "influxdb",
+            // the database/bucket name within InfluxDB
+            db: "zenoh_example",
+            // if the database doesn't exist, create it
+            create_db: false,
+            // strategy on storage closure
+            // variants include `drop_series`, `drop_db`, `do_nothing`
+            on_closure: "do_nothing",
+            private: {
+              // Required: InfluxDB credentials to read-write on the bucket
+              username: "admin",
+              password: "password"
+            }
+          }
+        }
+      }
+    },
+  }
+}
