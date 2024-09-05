@@ -329,7 +329,7 @@ impl Volume for InfluxDbVolume {
 
             let client_clone = client.clone();
             let name_clone = config.name.clone();
-            TOKIO_RUNTIME.spawn(async move {
+            let batch_future = async move {
                 let mut put_batch: Vec<InfluxWQuery> = Vec::new();
                 let mut measurement_counts: HashMap<OwnedKeyExpr, u64> = HashMap::new();
 
@@ -405,7 +405,12 @@ impl Volume for InfluxDbVolume {
                         }
                     }
                 }
-            });
+            };
+
+            match tokio::runtime::Handle::try_current() {
+                Ok(handle) => handle.spawn(batch_future),
+                Err(_) => TOKIO_RUNTIME.spawn(batch_future),
+            };
 
             Some(tx)
         } else {
