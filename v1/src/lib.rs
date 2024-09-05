@@ -319,7 +319,8 @@ impl Volume for InfluxDbVolume {
         }
 
         // Collect PUT requests and send in batches for efficiency?
-        let put_batch_tx = if let Some(put_batch_size) = put_batch_size {
+        let mut put_batch_tx = None;
+        if let Some(put_batch_size) = put_batch_size {
             debug!(
                 "[{}] PUT queries will be sent in batches of {} or after {:#?}",
                 config.name, put_batch_size, put_batch_timeout
@@ -412,10 +413,8 @@ impl Volume for InfluxDbVolume {
                 Err(_) => TOKIO_RUNTIME.spawn(batch_future),
             };
 
-            Some(tx)
-        } else {
-            None
-        };
+            put_batch_tx = Some(tx);
+        }
 
         Ok(Box::new(InfluxDbStorage {
             config,
