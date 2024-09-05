@@ -99,7 +99,7 @@ You can setup storages either at zenoh router startup via a configuration file, 
                 private: {
 
                   //For Influxdb v1.x:
-                  //Required: InfluxDB credentialsto read-write on the bucket
+                  //Required: InfluxDB credentials to read-write on the bucket
                   //username: "admin",
                   //password: "password"
                 
