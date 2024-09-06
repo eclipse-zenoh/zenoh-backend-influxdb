@@ -910,13 +910,13 @@ fn clauses_from_parameters(p: &str) -> ZResult<String> {
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
 
-    let tr = parameters.time_range();
-    if tr.is_none() {
-        result.push_str(" ORDER BY time DESC LIMIT 1");
-        return Ok(result);
-    }
-
-    let time_range = tr.unwrap();
+    let time_range = match parameters.time_range() {
+        Some(time_range) => time_range,
+        None => {
+            result.push_str(" ORDER BY time DESC LIMIT 1");
+            return Ok(result);
+        }
+    };
     match time_range {
         Ok(TimeRange(start, stop)) => {
             match start {
