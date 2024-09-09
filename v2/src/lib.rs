@@ -214,7 +214,7 @@ impl Plugin for InfluxDbBackend {
                     Ok(client) => client,
                     Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
                 };
-                match blockon_runtime(async { admin_client.ready().await }) {
+                match blockon_runtime(admin_client.ready()) {
                     Ok(res) => {
                         if !res {
                             bail!("InfluxDBv2 server is not ready! ")
@@ -252,9 +252,7 @@ pub struct InfluxDbVolume {
 impl InfluxDbVolume {
     async fn create_db(&self, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
         let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
-        self.admin_client
-            .create_bucket(Some(post_bucket_options))
-            .await
+        blockon_runtime(self.admin_client.create_bucket(Some(post_bucket_options)))
     }
 }
 
@@ -479,18 +477,20 @@ impl InfluxDbStorage {
 
         // get the value and if it exists then extract the timestamp from it
         let query = Query::new(qs);
-        let query_result: Vec<ZenohPoint> = match self.client.query::<ZenohPoint>(Some(query)).await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::error!(
-                    "Couldn't get data from InfluxDBv2 database {} with error: {} ",
-                    self.db_name,
-                    e
-                );
-                return Ok(None);
-            }
-        };
+
+        let client = self.client.clone();
+        let query_result: Vec<ZenohPoint> =
+            match await_task!(client.query::<ZenohPoint>(Some(query)).await, client) {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::error!(
+                        "Couldn't get data from InfluxDBv2 database {} with error: {} ",
+                        self.db_name,
+                        e
+                    );
+                    return Ok(None);
+                }
+            };
 
         match query_result.first() {
             Some(zp) => match Timestamp::from_str(&zp.timestamp) {
@@ -622,7 +622,6 @@ impl Storage for InfluxDbStorage {
             measurement.clone(),
             stop_timestamp
         );
-
         if let Err(e) = self
             .client
             .write(&self.db_name, stream::iter(zenoh_point))
@@ -634,7 +633,6 @@ impl Storage for InfluxDbStorage {
                 e
             )
         }
-
         // schedule_measurement_drop is used to schedule the drop of measurement later in the future, if it's empty
         // influx 2.x doesn't support dropping measurements from the API
         Ok(StorageInsertionResult::Deleted)
@@ -682,19 +680,19 @@ impl Storage for InfluxDbStorage {
 
         let query = Query::new(query_string);
         let client = self.client.clone();
-        let res = await_task!(client.query::<ZenohPoint>(Some(query)).await,);
 
-        let query_result: Vec<ZenohPoint> = match res {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::error!(
-                    "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
-                    self.db_name,
-                    e
-                );
-                vec![]
-            }
-        };
+        let query_result: Vec<ZenohPoint> =
+            match await_task!(client.query::<ZenohPoint>(Some(query)).await,) {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::error!(
+                        "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
+                        self.db_name,
+                        e
+                    );
+                    vec![]
+                }
+            };
 
         let mut result: Vec<StoredData> = vec![];
 
@@ -776,16 +774,18 @@ impl Storage for InfluxDbStorage {
 
         let query = Query::new(qs);
 
-        let vec_zpoint: Vec<ZenohPoint> = match self.client.query::<ZenohPoint>(Some(query)).await {
-            Ok(result) => result,
-            Err(e) => {
-                bail!(
-                    "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
-                    self.db_name,
-                    e
-                );
-            }
-        };
+        let client = self.client.clone();
+        let vec_zpoint: Vec<ZenohPoint> =
+            match await_task!(client.query::<ZenohPoint>(Some(query)).await,) {
+                Ok(result) => result,
+                Err(e) => {
+                    bail!(
+                        "Couldn't get data from database {} in InfluxDBv2 storage with error: {} ",
+                        self.db_name,
+                        e
+                    );
+                }
+            };
 
         for zp in vec_zpoint {
             match (
