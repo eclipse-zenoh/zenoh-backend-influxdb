@@ -37,8 +37,8 @@
             // variants include `drop_series`, `drop_db`, `do_nothing`
             on_closure: "do_nothing",
             private: {
-              // Required 
               // InfluxDB credentials, with read/write privileges for the database
+              // If not provided, will use volume private fields instead
               // the org_id value should be the same as for admin
               org_id: "organization ID",
               // this is a token with either:
