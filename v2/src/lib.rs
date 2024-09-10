@@ -158,7 +158,19 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
             org_id: org_id.clone(),
             token: token.clone(),
         })),
-        _ => Ok(None),
+        (None, None) => Ok(None),
+        _ => {
+            tracing::error!(
+                "Couldn't get {} and {} from config",
+                PROP_BACKEND_ORG_ID,
+                PROP_TOKEN
+            );
+            bail!(
+                "Properties `{}` and `{}` must both exist",
+                PROP_BACKEND_ORG_ID,
+                PROP_TOKEN
+            );
+        }
     }
 }
 
