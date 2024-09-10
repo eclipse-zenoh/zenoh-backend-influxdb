@@ -32,7 +32,7 @@ use zenoh::{
     bytes::Encoding,
     internal::{bail, buffers::ZBuf, zerror, Value},
     key_expr::{keyexpr, OwnedKeyExpr},
-    query::{Parameters, TimeExpr},
+    query::{Parameters, TimeExpr, ZenohParameters},
     time::Timestamp,
     try_init_log_from_env, Error, Result as ZResult,
 };
@@ -914,7 +914,12 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
         return Ok(None);
     }
 
-    let time_range = TimeRange::from_str(p);
+    let parameters = Parameters::from(p);
+    let time_range = match parameters.time_range() {
+        Some(time_range) => time_range,
+        None => return Ok(None),
+    };
+
     let mut result = String::new();
     match time_range {
         Ok(TimeRange(start, stop)) => {

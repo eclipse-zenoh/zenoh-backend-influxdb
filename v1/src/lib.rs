@@ -31,7 +31,7 @@ use zenoh::{
     bytes::Encoding,
     internal::{bail, buffers::ZBuf, zerror, Value},
     key_expr::{keyexpr, KeyExpr, OwnedKeyExpr},
-    query::{Parameters, TimeBound, TimeExpr, TimeRange},
+    query::{Parameters, TimeBound, TimeExpr, TimeRange, ZenohParameters},
     time::Timestamp,
     try_init_log_from_env, Error, Result as ZResult,
 };
@@ -906,9 +906,17 @@ fn key_exprs_to_influx_regex(path_exprs: &[&keyexpr]) -> String {
 }
 
 fn clauses_from_parameters(p: &str) -> ZResult<String> {
-    let time_range = TimeRange::from_str(p);
+    let parameters = Parameters::from(p);
     let mut result = String::with_capacity(256);
     result.push_str("WHERE kind!='DEL'");
+
+    let time_range = match parameters.time_range() {
+        Some(time_range) => time_range,
+        None => {
+            result.push_str(" ORDER BY time DESC LIMIT 1");
+            return Ok(result);
+        }
+    };
     match time_range {
         Ok(TimeRange(start, stop)) => {
             match start {
