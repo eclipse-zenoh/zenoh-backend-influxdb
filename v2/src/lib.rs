@@ -158,14 +158,7 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
             org_id: org_id.clone(),
             token: token.clone(),
         })),
-        _ => {
-            tracing::error!("Couldn't get token and org");
-            bail!(
-                "Properties `{}` and `{}` must exist",
-                PROP_BACKEND_ORG_ID,
-                PROP_TOKEN
-            );
-        }
+        _ => Ok(None),
     }
 }
 
@@ -315,14 +308,29 @@ impl Volume for InfluxDbVolume {
             }
         };
 
-        let creds = match extract_credentials(volume_cfg)? {
+        let storage_creds = match extract_credentials(volume_cfg)? {
             Some(creds) => creds,
-            _ => bail!("No credentials specified to access database '{}'", db),
+            None => {
+                match &self.credentials {
+                    Some(creds) => {
+                        tracing::debug!("Credentials not provided for new storage '{}'. Using volume credentials.", db);
+                        InfluxDbCredentials {
+                            org_id: creds.org_id.clone(),
+                            token: creds.token.clone(),
+                        }
+                    }
+                    None => bail!("No credentials specified to access database '{}'.", db),
+                }
+            }
         };
 
         // Client::new can panic: TODO : Switch to libraries without Panics
         let client = match std::panic::catch_unwind(|| {
-            Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+            Client::new(
+                url.clone(),
+                storage_creds.org_id.clone(),
+                storage_creds.token.clone(),
+            )
         }) {
             Ok(client) => client,
             Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
@@ -334,7 +342,7 @@ impl Volume for InfluxDbVolume {
             Ok(db_exists) => {
                 if !db_exists && createdb {
                     // Try to create db using user credentials
-                    match self.create_db(&creds.org_id, &db).await {
+                    match self.create_db(&storage_creds.org_id, &db).await {
                         Ok(_) => tracing::info!("Created {db} Influx"),
                         Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
                     }
