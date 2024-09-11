@@ -952,7 +952,9 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
                     result.push_str("start:");
                     write_timeexpr(&mut result, t, 1);
                 }
-                TimeBound::Unbounded => {}
+                TimeBound::Unbounded => {
+                    result.push_str("start:1970-01-01T00:00:00Z");
+                }
             }
             match stop {
                 TimeBound::Inclusive(t) => {
