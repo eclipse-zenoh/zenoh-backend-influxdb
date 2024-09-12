@@ -815,7 +815,13 @@ impl Storage for InfluxDbStorage {
                 OwnedKeyExpr::from_str(&zp.key_expr),
                 Timestamp::from_str(&zp.timestamp),
             ) {
-                (Ok(ke), Ok(ts)) => result.push((Some(ke), ts)),
+                (Ok(ke), Ok(ts)) => {
+                    if ke.eq(&NONE_KEY_REF) {
+                        result.push((None, ts))
+                    } else {
+                        result.push((Some(ke), ts))
+                    }
+                }
                 (Err(err_ke), Err(err_ts)) => tracing::warn!(
                     "Failed to parse (OwnedKeyExpr,Timestamp):({:?},{:?})  Errors:({:?},{:?})",
                     zp.key_expr,
