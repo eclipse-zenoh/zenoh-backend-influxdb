@@ -24,6 +24,7 @@ use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
 use chrono::{NaiveDateTime, SecondsFormat};
 use futures::prelude::*;
 use influxdb2::{
+    api::buckets::ListBucketsRequest,
     models::{DataPoint, PostBucketRequest, Query},
     Client,
 };
@@ -849,42 +850,73 @@ impl Storage for InfluxDbStorage {
 impl Drop for InfluxDbStorage {
     fn drop(&mut self) {
         tracing::debug!("Closing InfluxDBv2 storage");
-        let db = match self.config.volume_cfg.get(PROP_STORAGE_DB) {
-            Some(serde_json::Value::String(s)) => s.to_string(),
-            _ => {
-                tracing::error!("no db was found");
-                return;
-            }
-        };
-
         match self.on_closure {
             OnClosure::DropDb => {
-                blockon_runtime(async move {
-                    tracing::debug!("Close InfluxDBv2 storage, dropping database {}", db);
-                    if let Err(e) = self.admin_client.delete_bucket(&db).await {
-                        tracing::error!("Failed to drop InfluxDbv2 database '{}' : {}", db, e)
+                let db_name = self.db_name.clone();
+                let org = self.client.org.clone();
+                if let Err(e) = blockon_runtime(async {
+                    tracing::debug!("Getting bucket ID for database {}", db_name);
+                    let list_buckets_req = ListBucketsRequest {
+                        after: None,
+                        id: None,
+                        limit: None,
+                        name: Some(db_name.clone()),
+                        offset: None,
+                        org: None,
+                        org_id: Some(org),
+                    };
+                    let response = self
+                        .admin_client
+                        .list_buckets(Some(list_buckets_req))
+                        .await?;
+                    if response.buckets.is_empty() {
+                        bail!("Received empty bucket list from database");
                     }
-                });
+                    if response.buckets.len() > 1 {
+                        bail!("Influxdb2 bucket list contains more than one matching database");
+                    }
+                    let bucket_id = response.buckets[0]
+                        .id
+                        .clone()
+                        .ok_or_else(|| zerror!("database bucket ID is None"))?;
+                    tracing::debug!(
+                        "Close InfluxDBv2 storage, dropping database {} with bucket ID {}",
+                        db_name,
+                        bucket_id
+                    );
+                    self.admin_client.delete_bucket(&bucket_id).await?;
+
+                    Ok::<(), Error>(())
+                }) {
+                    tracing::error!(
+                        "Failed to drop InfluxDbv2 database '{}': {}",
+                        self.db_name,
+                        e
+                    );
+                }
             }
             OnClosure::DropSeries => {
                 blockon_runtime(async move {
                     tracing::debug!(
                         "Close InfluxDBv2 storage, dropping all series from database {}",
-                        db
+                        self.db_name
                     );
                     let start = NaiveDateTime::MIN;
                     let stop = NaiveDateTime::MAX;
-                    if let Err(e) = self.client.delete(&db, start, stop, None).await {
+                    if let Err(e) = self.client.delete(&self.db_name, start, stop, None).await {
                         tracing::error!(
                             "Failed to drop all series from InfluxDbv2 database '{}' : {}",
-                            db,
+                            self.db_name,
                             e
                         )
                     }
                 });
             }
             OnClosure::DoNothing => {
-                tracing::debug!("Close InfluxDBv2 storage, keeping database {} as it is", db);
+                tracing::debug!(
+                    "Close InfluxDBv2 storage, keeping database {} as it is",
+                    self.db_name
+                );
             }
         }
     }
