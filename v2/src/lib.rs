@@ -32,7 +32,7 @@ use zenoh::{
     bytes::Encoding,
     internal::{bail, buffers::ZBuf, zerror, Value},
     key_expr::{keyexpr, OwnedKeyExpr},
-    query::{Parameters, TimeExpr},
+    query::{Parameters, TimeExpr, ZenohParameters},
     time::Timestamp,
     try_init_log_from_env, Error, Result as ZResult,
 };
@@ -158,10 +158,15 @@ fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
             org_id: org_id.clone(),
             token: token.clone(),
         })),
+        (None, None) => Ok(None),
         _ => {
-            tracing::error!("Couldn't get token and org");
+            tracing::error!(
+                "Couldn't get {} and {} from config",
+                PROP_BACKEND_ORG_ID,
+                PROP_TOKEN
+            );
             bail!(
-                "Properties `{}` and `{}` must exist",
+                "Properties `{}` and `{}` must both exist",
                 PROP_BACKEND_ORG_ID,
                 PROP_TOKEN
             );
@@ -318,14 +323,29 @@ impl Volume for InfluxDbVolume {
             }
         };
 
-        let creds = match extract_credentials(volume_cfg)? {
+        let storage_creds = match extract_credentials(volume_cfg)? {
             Some(creds) => creds,
-            _ => bail!("No credentials specified to access database '{}'", db),
+            None => {
+                match &self.credentials {
+                    Some(creds) => {
+                        tracing::debug!("Credentials not provided for new storage '{}'. Using volume credentials.", db);
+                        InfluxDbCredentials {
+                            org_id: creds.org_id.clone(),
+                            token: creds.token.clone(),
+                        }
+                    }
+                    None => bail!("No credentials specified to access database '{}'.", db),
+                }
+            }
         };
 
         // Client::new can panic: TODO : Switch to libraries without Panics
         let client = match std::panic::catch_unwind(|| {
-            Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+            Client::new(
+                url.clone(),
+                storage_creds.org_id.clone(),
+                storage_creds.token.clone(),
+            )
         }) {
             Ok(client) => client,
             Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
@@ -917,7 +937,12 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
         return Ok(None);
     }
 
-    let time_range = TimeRange::from_str(p);
+    let parameters = Parameters::from(p);
+    let time_range = match parameters.time_range() {
+        Some(time_range) => time_range,
+        None => return Ok(None),
+    };
+
     let mut result = String::new();
     match time_range {
         Ok(TimeRange(start, stop)) => {
@@ -930,7 +955,9 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
                     result.push_str("start:");
                     write_timeexpr(&mut result, t, 1);
                 }
-                TimeBound::Unbounded => {}
+                TimeBound::Unbounded => {
+                    result.push_str("start:1970-01-01T00:00:00Z");
+                }
             }
             match stop {
                 TimeBound::Inclusive(t) => {
