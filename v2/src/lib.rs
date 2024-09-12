@@ -901,8 +901,24 @@ impl Drop for InfluxDbStorage {
                         "Close InfluxDBv2 storage, dropping all series from database {}",
                         self.db_name
                     );
-                    let start = NaiveDateTime::MIN;
-                    let stop = NaiveDateTime::MAX;
+                    // NOTE:
+                    //   InfluxDB2 MIN and MAX datetimes are as follows:
+                    //   - Min: 1677-09-21T00:12:43.145224194Z
+                    //   - Max: 2262-04-11T23:47:16.854775807Z
+                    //   `client.delete` function takes `NaiveDateTime` as parameters, internally converts them to string,
+                    //   but omits the nanoseconds. This is why `start` parameter is set to `1677-09-21T00:12:44.0Z` to be >= Min.
+                    let start = NaiveDateTime::new(
+                        chrono::NaiveDate::from_ymd_opt(1677, 9, 21)
+                            .expect("Influxdb2 min date should be valid"),
+                        chrono::NaiveTime::from_hms_opt(0, 12, 44)
+                            .expect("Influxdb2 min date's time should be valid"),
+                    );
+                    let stop = NaiveDateTime::new(
+                        chrono::NaiveDate::from_ymd_opt(2262, 4, 11)
+                            .expect("Influxdb2 max date should be valid"),
+                        chrono::NaiveTime::from_hms_opt(23, 47, 16)
+                            .expect("Influxdb2 max date's time should be valid"),
+                    );
                     if let Err(e) = self.client.delete(&self.db_name, start, stop, None).await {
                         tracing::error!(
                             "Failed to drop all series from InfluxDbv2 database '{}' : {}",
