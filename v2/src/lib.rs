@@ -250,9 +250,14 @@ pub struct InfluxDbVolume {
 }
 
 impl InfluxDbVolume {
-    async fn create_db(&self, org_id: &str, db: &str) -> Result<(), influxdb2::RequestError> {
+    async fn create_db(&self, org_id: &str, db: &str) -> ZResult<()> {
         let post_bucket_options = PostBucketRequest::new(org_id.into(), db.into());
-        blockon_runtime(self.admin_client.create_bucket(Some(post_bucket_options)))
+        let admin_client = self.admin_client.clone();
+        match await_task!(admin_client.create_bucket(Some(post_bucket_options)).await,) {
+            Ok(_) => tracing::info!("Created {db} Influx"),
+            Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
+        }
+        Ok(())
     }
 }
 
@@ -332,10 +337,7 @@ impl Volume for InfluxDbVolume {
             Ok(db_exists) => {
                 if !db_exists && createdb {
                     // Try to create db using user credentials
-                    match self.create_db(&creds.org_id, &db).await {
-                        Ok(_) => tracing::info!("Created {db} Influx"),
-                        Err(e) => bail!("Failed to create InfluxDBv2 Storage : {:?}", e),
-                    }
+                    self.create_db(&creds.org_id, &db).await?
                 } else if db_exists && createdb {
                     tracing::warn!("Database '{db}' already exists exists in Influx and config 'create_db'='true'");
                 }
@@ -480,7 +482,7 @@ impl InfluxDbStorage {
 
         let client = self.client.clone();
         let query_result: Vec<ZenohPoint> =
-            match await_task!(client.query::<ZenohPoint>(Some(query)).await, client) {
+            match await_task!(client.query::<ZenohPoint>(Some(query)).await,) {
                 Ok(result) => result,
                 Err(e) => {
                     tracing::error!(
@@ -554,11 +556,10 @@ impl Storage for InfluxDbStorage {
             .timestamp(influx_time) //converted timestamp to i64
             .build()?];
 
-        match self
-            .client
-            .write(&self.db_name, stream::iter(zenoh_point))
-            .await
-        {
+        let client = self.client.clone();
+        let db_name = self.db_name.clone();
+
+        match await_task!(client.write(&db_name, stream::iter(zenoh_point)).await,) {
             Ok(_) => Ok(StorageInsertionResult::Inserted),
             Err(e) => bail!(
                 "Failed to put Value for {:?} in InfluxDBv2 storage : {}",
@@ -592,11 +593,14 @@ impl Storage for InfluxDbStorage {
             "Delete {:?} with Influx query in InfluxDBv2 storage, Time Range: {:?} - {:?}, Predicate: {:?}",
             measurement, start_timestamp, stop_timestamp, predicate
         );
-        if let Err(e) = self
-            .client
-            .delete(&self.db_name, start_timestamp, stop_timestamp, predicate)
-            .await
-        {
+
+        let client = self.client.clone();
+        let db_name = self.db_name.clone();
+        if let Err(e) = await_task!(
+            client
+                .delete(&db_name, start_timestamp, stop_timestamp, predicate)
+                .await,
+        ) {
             bail!(
                 "Failed to delete points for measurement '{}' from InfluxDBv2 storage : {}",
                 measurement,
@@ -622,11 +626,10 @@ impl Storage for InfluxDbStorage {
             measurement.clone(),
             stop_timestamp
         );
-        if let Err(e) = self
-            .client
-            .write(&self.db_name, stream::iter(zenoh_point))
-            .await
-        {
+
+        let client = self.client.clone();
+        let db_name = self.db_name.clone();
+        if let Err(e) = await_task!(client.write(&db_name, stream::iter(zenoh_point)).await,) {
             bail!(
                 "Failed to mark measurement {:?} as deleted : {} in InfluxDBv2 storage",
                 measurement,
