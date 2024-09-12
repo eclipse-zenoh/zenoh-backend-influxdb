@@ -357,7 +357,7 @@ impl Volume for InfluxDbVolume {
             Ok(db_exists) => {
                 if !db_exists && createdb {
                     // Try to create db using user credentials
-                    self.create_db(&creds.org_id, &db).await?
+                    self.create_db(&storage_creds.org_id, &db).await?
                 } else if db_exists && createdb {
                     tracing::warn!("Database '{db}' already exists exists in Influx and config 'create_db'='true'");
                 }
