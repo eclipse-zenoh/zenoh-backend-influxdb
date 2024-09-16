@@ -1436,9 +1436,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.60"
+version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ffbb5a1b541ea2561f8c41c087286cc091e21e556a4f09a8f6cbf17b69b141"
+checksum = "235e081f3925a06703c2d0117ea8b91f042756fd6e7a6e5d901e8ca1a996b220"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
@@ -4352,18 +4352,18 @@ dependencies = [
  "zenoh-codec",
  "zenoh-collections",
  "zenoh-config",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-keyexpr 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
+ "zenoh-keyexpr",
  "zenoh-link",
- "zenoh-macros 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-plugin-trait 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-macros",
+ "zenoh-plugin-trait",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
  "zenoh-sync",
  "zenoh-task",
  "zenoh-transport",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4383,7 +4383,7 @@ dependencies = [
  "tracing",
  "uuid",
  "zenoh",
- "zenoh-plugin-trait 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-plugin-trait",
  "zenoh_backend_traits",
 ]
 
@@ -4409,7 +4409,7 @@ dependencies = [
  "tracing",
  "uuid",
  "zenoh",
- "zenoh-plugin-trait 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-plugin-trait",
  "zenoh_backend_traits",
 ]
 
@@ -4452,11 +4452,11 @@ dependencies = [
  "tracing",
  "uhlc",
  "validated_struct",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-macros 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
+ "zenoh-macros",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4466,19 +4466,8 @@ source = "git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-pl
 dependencies = [
  "lazy_static",
  "tokio",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-core"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "lazy_static",
- "tokio",
- "zenoh-result 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-runtime 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-result",
+ "zenoh-runtime",
 ]
 
 [[package]]
@@ -4491,7 +4480,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "sha3",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4505,21 +4494,7 @@ dependencies = [
  "schemars",
  "serde",
  "token-cell",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-keyexpr"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "hashbrown",
- "keyed-set",
- "rand 0.8.5",
- "schemars",
- "serde",
- "token-cell",
- "zenoh-result 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4536,7 +4511,7 @@ dependencies = [
  "zenoh-link-unixsock_stream",
  "zenoh-link-ws",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4555,11 +4530,11 @@ dependencies = [
  "tracing",
  "zenoh-buffers",
  "zenoh-codec",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4581,10 +4556,10 @@ dependencies = [
  "webpki-roots 0.26.5",
  "x509-parser",
  "zenoh-config",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4597,11 +4572,11 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4624,11 +4599,11 @@ dependencies = [
  "webpki-roots 0.26.5",
  "x509-parser",
  "zenoh-config",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
 ]
 
 [[package]]
@@ -4642,12 +4617,12 @@ dependencies = [
  "tokio-util",
  "tracing",
  "zenoh-buffers",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
  "zenoh-sync",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4661,11 +4636,11 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
 ]
 
 [[package]]
@@ -4680,12 +4655,12 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-link-commons",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4696,18 +4671,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.77",
- "zenoh-keyexpr 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-macros"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.77",
- "zenoh-keyexpr 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-keyexpr",
 ]
 
 [[package]]
@@ -4720,25 +4684,10 @@ dependencies = [
  "serde",
  "tracing",
  "zenoh-config",
- "zenoh-keyexpr 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-macros 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-plugin-trait"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "git-version",
- "libloading",
- "serde",
- "tracing",
- "zenoh-keyexpr 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-macros 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-result 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-util 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-keyexpr",
+ "zenoh-macros",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4751,22 +4700,14 @@ dependencies = [
  "serde",
  "uhlc",
  "zenoh-buffers",
- "zenoh-keyexpr 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-keyexpr",
+ "zenoh-result",
 ]
 
 [[package]]
 name = "zenoh-result"
 version = "1.0.0-dev"
 source = "git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features#54f0b8a97d8ff9f1cde051b3a31110cb29d91189"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
-name = "zenoh-result"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
 dependencies = [
  "anyhow",
 ]
@@ -4780,21 +4721,8 @@ dependencies = [
  "ron",
  "serde",
  "tokio",
- "zenoh-macros 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-runtime"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "lazy_static",
- "ron",
- "serde",
- "tokio",
- "zenoh-macros 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-result 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-macros",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4807,7 +4735,7 @@ dependencies = [
  "tokio",
  "zenoh-buffers",
  "zenoh-collections",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
 ]
 
 [[package]]
@@ -4819,8 +4747,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
+ "zenoh-runtime",
 ]
 
 [[package]]
@@ -4845,15 +4773,15 @@ dependencies = [
  "zenoh-buffers",
  "zenoh-codec",
  "zenoh-config",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-core",
  "zenoh-crypto",
  "zenoh-link",
  "zenoh-protocol",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-runtime 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-result",
+ "zenoh-runtime",
  "zenoh-sync",
  "zenoh-task",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-util",
 ]
 
 [[package]]
@@ -4877,33 +4805,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "winapi",
- "zenoh-core 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
-]
-
-[[package]]
-name = "zenoh-util"
-version = "1.0.0-dev"
-source = "git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main#744f9deb71720c9b9d832f6aa6408106ec1d27a8"
-dependencies = [
- "async-trait",
- "const_format",
- "flume",
- "home",
- "humantime",
- "lazy_static",
- "libc",
- "libloading",
- "pnet_datalink",
- "serde",
- "serde_json",
- "shellexpand",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "winapi",
- "zenoh-core 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
- "zenoh-result 1.0.0-dev (git+htttps://github.com/eclipse-zenoh/zenoh.git?branch=main)",
+ "zenoh-core",
+ "zenoh-result",
 ]
 
 [[package]]
@@ -4918,9 +4821,9 @@ dependencies = [
  "schemars",
  "serde_json",
  "zenoh",
- "zenoh-plugin-trait 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-result 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
- "zenoh-util 1.0.0-dev (git+https://github.com/eclipse-zenoh/zenoh.git?branch=feat/improved-plugin-features)",
+ "zenoh-plugin-trait",
+ "zenoh-result",
+ "zenoh-util",
 ]
 
 [[package]]
