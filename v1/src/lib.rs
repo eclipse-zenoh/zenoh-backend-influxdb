@@ -917,7 +917,7 @@ fn clauses_from_parameters(p: &str) -> ZResult<String> {
         }
     };
     match time_range {
-        Ok(TimeRange(start, stop)) => {
+        Ok(TimeRange { start, end }) => {
             match start {
                 TimeBound::Inclusive(t) => {
                     result.push_str(" AND time >= ");
@@ -929,7 +929,7 @@ fn clauses_from_parameters(p: &str) -> ZResult<String> {
                 }
                 TimeBound::Unbounded => {}
             }
-            match stop {
+            match end {
                 TimeBound::Inclusive(t) => {
                     result.push_str(" AND time <= ");
                     write_timeexpr(&mut result, t);

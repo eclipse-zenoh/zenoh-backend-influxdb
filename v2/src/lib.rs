@@ -998,7 +998,7 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
 
     let mut result = String::new();
     match time_range {
-        Ok(TimeRange(start, stop)) => {
+        Ok(TimeRange { start, end }) => {
             match start {
                 TimeBound::Inclusive(t) => {
                     result.push_str("start:");
@@ -1012,7 +1012,7 @@ fn timerange_from_parameters(p: &str) -> ZResult<Option<String>> {
                     result.push_str("start:0");
                 }
             }
-            match stop {
+            match end {
                 TimeBound::Inclusive(t) => {
                     result.push_str(", stop:");
                     write_timeexpr(&mut result, t, 1);
