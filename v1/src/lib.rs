@@ -217,7 +217,6 @@ impl Volume for InfluxDbVolume {
         Capability {
             persistence: Persistence::Durable,
             history: History::All,
-            read_cost: 1,
         }
     }
 
