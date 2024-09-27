@@ -440,9 +440,9 @@ impl Storage for InfluxDbStorage {
         }
 
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-        let (base64, strvalue) = match value.payload().deserialize::<String>() {
+        let (base64, strvalue) = match value.payload().try_to_string() {
             Ok(s) => (false, s),
-            Err(err) => (true, b64_std_engine.encode(err.to_string())),
+            Err(err) => (true, b64_std_engine.encode(err.to_string()).into()),
         };
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
@@ -460,7 +460,7 @@ impl Storage for InfluxDbStorage {
         .add_field("encoding_prefix", encoding.id())
         .add_field("encoding_suffix", encoding_string_rep) // TODO: Rename To Encoding and only keep String rep
         .add_field("base64", base64)
-        .add_field("value", strvalue);
+        .add_field("value", strvalue.as_ref());
 
         debug!("Put {:?} with Influx query: {:?}", measurement, query);
         if let Err(e) = self.client.query(&query).await {
