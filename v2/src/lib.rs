@@ -763,7 +763,11 @@ impl Storage for InfluxDbStorage {
                     continue;
                 }
             };
-            result.push(StoredData { payload: payload.into(), encoding, timestamp });
+            result.push(StoredData {
+                payload: payload.into(),
+                encoding,
+                timestamp,
+            });
         }
         Ok(result)
     }
