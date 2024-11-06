@@ -28,8 +28,8 @@ use serde::Deserialize;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 use zenoh::{
-    bytes::Encoding,
-    internal::{bail, buffers::ZBuf, zerror, Value},
+    bytes::{Encoding, ZBytes},
+    internal::{bail, buffers::ZBuf, zerror},
     key_expr::{keyexpr, KeyExpr, OwnedKeyExpr},
     query::{Parameters, TimeBound, TimeExpr, TimeRange, ZenohParameters},
     time::Timestamp,
@@ -419,7 +419,8 @@ impl Storage for InfluxDbStorage {
     async fn put(
         &mut self,
         key: Option<OwnedKeyExpr>,
-        value: Value,
+        payload: ZBytes,
+        encoding: Encoding,
         timestamp: Timestamp,
     ) -> ZResult<StorageInsertionResult> {
         let measurement = key.unwrap_or_else(|| OwnedKeyExpr::from_str(NONE_KEY).unwrap());
@@ -440,7 +441,7 @@ impl Storage for InfluxDbStorage {
         }
 
         // encode the value as a string to be stored in InfluxDB, converting to base64 if the buffer is not a UTF-8 string
-        let (base64, strvalue) = match value.payload().try_to_string() {
+        let (base64, strvalue) = match payload.try_to_string() {
             Ok(s) => (false, s),
             Err(err) => (true, b64_std_engine.encode(err.to_string()).into()),
         };
@@ -448,8 +449,7 @@ impl Storage for InfluxDbStorage {
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
         // For simpler/faster deserialization, we store encoding, timestamp and base64 as fields.
         // while the kind is stored as a tag to be indexed by InfluxDB and have faster queries on it.
-        let encoding_string_rep = value.encoding().to_string(); // add_field only supports Strings and not Vec<u8>
-        let encoding: &Encoding = value.encoding();
+        let encoding_string_rep = encoding.to_string(); // add_field only supports Strings and not Vec<u8>
 
         let query = InfluxWQuery::new(
             InfluxTimestamp::Nanoseconds(influx_time),
@@ -612,8 +612,11 @@ impl Storage for InfluxDbStorage {
                                             continue;
                                         }
                                     };
-                                    let value = Value::new(payload, encoding);
-                                    result.push(StoredData { value, timestamp });
+                                    result.push(StoredData {
+                                        payload: payload.into(),
+                                        encoding,
+                                        timestamp,
+                                    });
                                 }
                             }
                         }
