@@ -558,7 +558,7 @@ impl Storage for InfluxDbStorage {
 
         let (base64, strvalue) = match payload.try_to_string() {
             Ok(s) => (false, s),
-            Err(err) => (true, b64_std_engine.encode(err.to_string()).into()),
+            Err(_) => (true, b64_std_engine.encode(payload.to_bytes()).into()),
         };
 
         // Note: tags are stored as strings in InfluxDB, while fileds are typed.
