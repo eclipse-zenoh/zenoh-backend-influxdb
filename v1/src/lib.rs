@@ -40,6 +40,7 @@ use zenoh_backend_traits::{
     StorageInsertionResult, *,
 };
 use zenoh_plugin_trait::{plugin_long_version, plugin_version, Plugin};
+use zenoh_util::ffi::JsonValue;
 
 const WORKER_THREAD_NUM: usize = 2;
 const MAX_BLOCK_THREAD_NUM: usize = 50;
@@ -145,12 +146,10 @@ impl Plugin for InfluxDbBackend {
 
         debug!("InfluxDB backend {}", Self::PLUGIN_VERSION);
 
-        let mut config = config.clone();
-        config
-            .rest
-            .insert("version".into(), Self::PLUGIN_VERSION.into());
+        let mut cfg_rest = config.rest.into_serde_map();
+        cfg_rest.insert("version".into(), Self::PLUGIN_VERSION.into());
 
-        let url = match config.rest.get(PROP_BACKEND_URL) {
+        let url = match cfg_rest.get(PROP_BACKEND_URL) {
             Some(serde_json::Value::String(url)) => url.clone(),
             _ => {
                 bail!(
@@ -165,8 +164,8 @@ impl Plugin for InfluxDbBackend {
 
         // Note: remove username/password from properties to not re-expose them in admin_status
         let credentials = match (
-            get_private_conf(&config.rest, PROP_BACKEND_USERNAME)?,
-            get_private_conf(&config.rest, PROP_BACKEND_PASSWORD)?,
+            get_private_conf(&cfg_rest, PROP_BACKEND_USERNAME)?,
+            get_private_conf(&cfg_rest, PROP_BACKEND_PASSWORD)?,
         ) {
             (Some(username), Some(password)) => {
                 admin_client = admin_client.with_auth(username, password);
@@ -193,6 +192,9 @@ impl Plugin for InfluxDbBackend {
             Err(e) => bail!("Failed to create InfluxDb Volume : {}", e),
         }
 
+        let mut config = config.clone();
+        config.rest = cfg_rest.into();
+
         Ok(Box::new(InfluxDbVolume {
             admin_status: config,
             admin_client,
@@ -209,8 +211,8 @@ pub struct InfluxDbVolume {
 
 #[async_trait]
 impl Volume for InfluxDbVolume {
-    fn get_admin_status(&self) -> serde_json::Value {
-        self.admin_status.to_json_value()
+    fn get_admin_status(&self) -> JsonValue {
+        self.admin_status.to_json_value().into()
     }
 
     fn get_capability(&self) -> Capability {
@@ -221,7 +223,8 @@ impl Volume for InfluxDbVolume {
     }
 
     async fn create_storage(&self, mut config: StorageConfig) -> ZResult<Box<dyn Storage>> {
-        let volume_cfg = match config.volume_cfg.as_object() {
+        let mut cfg = config.volume_cfg.into_serde_value();
+        let volume_cfg = match cfg.as_object_mut() {
             Some(v) => v,
             None => bail!("InfluxDB backed storages need some volume-specific configuration"),
         };
@@ -285,10 +288,7 @@ impl Volume for InfluxDbVolume {
         }
 
         // re-insert the actual name of database (in case it has been generated)
-        config
-            .volume_cfg
-            .as_object_mut()
-            .unwrap()
+        volume_cfg
             .entry(PROP_STORAGE_DB)
             .or_insert(db.clone().into());
 
@@ -298,6 +298,7 @@ impl Volume for InfluxDbVolume {
             admin_client = admin_client.with_auth(username, password);
         }
 
+        config.volume_cfg = cfg.into();
         Ok(Box::new(InfluxDbStorage {
             config,
             admin_client,
@@ -411,9 +412,9 @@ impl InfluxDbStorage {
 
 #[async_trait]
 impl Storage for InfluxDbStorage {
-    fn get_admin_status(&self) -> serde_json::Value {
+    fn get_admin_status(&self) -> JsonValue {
         // TODO: possibly add more properties in returned Value for more information about this storage
-        self.config.to_json_value()
+        self.config.to_json_value().into()
     }
 
     async fn put(
