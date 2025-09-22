@@ -51,3 +51,4 @@ zenoh = { version = "1.5.1", features = [
 ] , git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
 zenoh_backend_traits = { version = "1.5.1", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
 zenoh-plugin-trait = { version = "1.5.1", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
+zenoh-util = { version = "1.5.1", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
