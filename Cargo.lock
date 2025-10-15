@@ -1548,7 +1548,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.7",
  "tokio",
  "tower-service",
  "tracing",
@@ -4981,7 +4981,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v1"
-version = "1.5.1"
+version = "1.6.1"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
@@ -5003,7 +5003,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v2"
-version = "1.5.1"
+version = "1.6.1"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
