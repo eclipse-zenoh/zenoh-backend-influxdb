@@ -21,7 +21,7 @@ use std::{
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as b64_std_engine, Engine};
-use chrono::{NaiveDateTime, SecondsFormat};
+use chrono::{DateTime, NaiveDateTime, SecondsFormat};
 use futures::prelude::*;
 use influxdb2::{
     api::buckets::ListBucketsRequest,
@@ -606,7 +606,7 @@ impl Storage for InfluxDbStorage {
         // delete all points from the measurement that are older than this DELETE message
         // (in case more recent PUT have been recevived un-ordered)
 
-        let start_timestamp = NaiveDateTime::UNIX_EPOCH;
+        let start_timestamp = DateTime::UNIX_EPOCH.naive_utc();
         let stop_timestamp = chrono::DateTime::from_timestamp(
             timestamp.get_time().as_secs() as i64,
             timestamp.get_time().subsec_nanos(),
