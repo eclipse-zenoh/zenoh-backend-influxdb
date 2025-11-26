@@ -20,7 +20,7 @@ Check the website [zenoh.io](http://zenoh.io) and the [roadmap](https://github.c
 
 In Zenoh a backend is a storage technology (such as DBMS, time-series database, file system...) alowing to store the
 keys/values publications made via zenoh and return them on queries.
-See the [zenoh documentation](http://zenoh.io/docs/manual/backends/) for more details.
+See the [zenoh documentation](https://zenoh.io/docs/manual/abstractions/#storage) for more details.
 
 This backend relies on an [InfluxDB](https://www.influxdata.com/products/influxdb/) server
 to implement the storages.
