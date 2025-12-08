@@ -48,7 +48,7 @@ zenoh = { version = "1.7.0", features = [
     "unstable",
     "internal",
     "plugins"
-] }
-zenoh_backend_traits = { version = "1.7.0"}
-zenoh-plugin-trait = { version = "1.7.0"}
-zenoh-util = { version = "1.7.0"}
+] , git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
+zenoh_backend_traits = { version = "1.7.0", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
+zenoh-plugin-trait = { version = "1.7.0", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
+zenoh-util = { version = "1.7.0", git = "https://github.com/eclipse-zenoh/zenoh.git" , branch = "main" }
