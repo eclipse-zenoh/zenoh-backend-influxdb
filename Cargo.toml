@@ -18,7 +18,7 @@ resolver = "1"
 
 
 [workspace.package]
-version = "1.9.0"
+version = "1.9.0-7-gb73a6b2"
 repository = "https://github.com/eclipse-zenoh/zenoh-backend-influxdb"
 homepage = "http://zenoh.io"
 authors = [
