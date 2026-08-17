@@ -26,7 +26,7 @@ use futures::prelude::*;
 use influxdb2::{
     api::buckets::ListBucketsRequest,
     models::{DataPoint, PostBucketRequest, Query},
-    Client,
+    Client, ClientBuilder,
 };
 use uuid::Uuid;
 use zenoh::{
@@ -99,6 +99,15 @@ pub const PROP_BACKEND_URL: &str = "url";
 pub const PROP_BACKEND_ORG_ID: &str = "org_id";
 pub const PROP_TOKEN: &str = "token";
 
+// HTTP client tuning (all optional, defaults below)
+pub const PROP_HTTP_REQUEST_TIMEOUT_MS: &str = "http_request_timeout_ms";
+pub const PROP_TCP_KEEPALIVE_SECS: &str = "tcp_keepalive_secs";
+pub const PROP_POOL_IDLE_TIMEOUT_SECS: &str = "pool_idle_timeout_secs";
+
+const DEFAULT_HTTP_REQUEST_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_TCP_KEEPALIVE_SECS: u64 = 30;
+const DEFAULT_POOL_IDLE_TIMEOUT_SECS: u64 = 60;
+
 // Properties used by the Storage
 pub const PROP_STORAGE_DB: &str = "db";
 pub const PROP_STORAGE_CREATE_DB: &str = "create_db";
@@ -149,6 +158,71 @@ fn get_private_conf<'a>(config: Config<'a>, credit: &str) -> ZResult<Option<&'a 
             bail!("Optional property `{}` must be a string", credit)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HttpClientOptions {
+    request_timeout: Option<Duration>,
+    tcp_keepalive: Option<Duration>,
+    pool_idle_timeout: Option<Duration>,
+}
+
+fn read_u64_property(config: Config, key: &str, default: u64) -> ZResult<u64> {
+    match config.get(key) {
+        None => Ok(default),
+        Some(serde_json::Value::Number(n)) => n
+            .as_u64()
+            .ok_or_else(|| zerror!("`{}` must be a non-negative integer", key).into()),
+        Some(other) => bail!(
+            "`{}` must be a non-negative integer (got: {})",
+            key,
+            other
+        ),
+    }
+}
+
+fn parse_http_client_options(config: Config) -> ZResult<HttpClientOptions> {
+    let request_timeout_ms =
+        read_u64_property(config, PROP_HTTP_REQUEST_TIMEOUT_MS, DEFAULT_HTTP_REQUEST_TIMEOUT_MS)?;
+    let tcp_keepalive_secs =
+        read_u64_property(config, PROP_TCP_KEEPALIVE_SECS, DEFAULT_TCP_KEEPALIVE_SECS)?;
+    let pool_idle_timeout_secs = read_u64_property(
+        config,
+        PROP_POOL_IDLE_TIMEOUT_SECS,
+        DEFAULT_POOL_IDLE_TIMEOUT_SECS,
+    )?;
+    Ok(HttpClientOptions {
+        request_timeout: (request_timeout_ms > 0).then(|| Duration::from_millis(request_timeout_ms)),
+        tcp_keepalive: (tcp_keepalive_secs > 0).then(|| Duration::from_secs(tcp_keepalive_secs)),
+        pool_idle_timeout: (pool_idle_timeout_secs > 0)
+            .then(|| Duration::from_secs(pool_idle_timeout_secs)),
+    })
+}
+
+fn build_influxdb_client(
+    url: &str,
+    org_id: &str,
+    token: &str,
+    opts: HttpClientOptions,
+) -> ZResult<Client> {
+    let mut reqwest_builder = reqwest::ClientBuilder::new();
+    if let Some(t) = opts.request_timeout {
+        reqwest_builder = reqwest_builder.timeout(t);
+    }
+    if let Some(t) = opts.tcp_keepalive {
+        reqwest_builder = reqwest_builder.tcp_keepalive(t);
+    }
+    if let Some(t) = opts.pool_idle_timeout {
+        reqwest_builder = reqwest_builder.pool_idle_timeout(t);
+    }
+    ClientBuilder::with_builder(
+        reqwest_builder,
+        url.to_string(),
+        org_id.to_string(),
+        token.to_string(),
+    )
+    .build()
+    .map_err(|e| zerror!("Error in creating client for InfluxDBv2: {:?}", e).into())
 }
 
 fn extract_credentials(config: Config) -> ZResult<Option<InfluxDbCredentials>> {
@@ -211,12 +285,15 @@ impl Plugin for InfluxDbBackend {
         #[allow(unused_mut)]
         let mut admin_client: Client;
 
+        let http_opts = parse_http_client_options(&cfg_rest)?;
+
         match extract_credentials(&cfg_rest)? {
             Some(creds) => {
                 admin_client = match std::panic::catch_unwind(|| {
-                    Client::new(url.clone(), creds.org_id.clone(), creds.token.clone())
+                    build_influxdb_client(&url, &creds.org_id, &creds.token, http_opts)
                 }) {
-                    Ok(client) => client,
+                    Ok(Ok(client)) => client,
+                    Ok(Err(e)) => return Err(e),
                     Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
                 };
                 match blockon_runtime(admin_client.ready()) {
@@ -346,15 +423,20 @@ impl Volume for InfluxDbVolume {
             }
         };
 
-        // Client::new can panic: TODO : Switch to libraries without Panics
+        let volume_rest = self.admin_status.rest.into_serde_map();
+        let storage_http_opts = parse_http_client_options(&volume_rest)?;
+
+        // build_influxdb_client can panic: TODO : Switch to libraries without Panics
         let client = match std::panic::catch_unwind(|| {
-            Client::new(
-                url.clone(),
-                storage_creds.org_id.clone(),
-                storage_creds.token.clone(),
+            build_influxdb_client(
+                &url,
+                &storage_creds.org_id,
+                &storage_creds.token,
+                storage_http_opts,
             )
         }) {
-            Ok(client) => client,
+            Ok(Ok(client)) => client,
+            Ok(Err(e)) => return Err(e),
             Err(e) => bail!("Error in creating client for InfluxDBv2 storage: {:?}", e),
         };
 
@@ -383,9 +465,10 @@ impl Volume for InfluxDbVolume {
         };
 
         let admin_client = match std::panic::catch_unwind(|| {
-            Client::new(url.clone(), &admin_creds.org_id, &admin_creds.token)
+            build_influxdb_client(&url, &admin_creds.org_id, &admin_creds.token, storage_http_opts)
         }) {
-            Ok(client) => client,
+            Ok(Ok(client)) => client,
+            Ok(Err(e)) => return Err(e),
             Err(e) => bail!("Error in creating client for InfluxDBv2 volume: {:?}", e),
         };
 
