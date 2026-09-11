@@ -32,6 +32,11 @@ influxdb2 = { version = "0.5.2", features = [
 ], default-features = false }
 influxdb2-derive = "0.1.1"
 influxdb2-structmap = "0.2"
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+    "stream",
+    "json",
+] }
 lazy_static = { workspace = true }
 num-traits = "0.2"
 rand = "0.8.5"
