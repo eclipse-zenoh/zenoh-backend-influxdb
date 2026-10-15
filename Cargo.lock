@@ -5323,7 +5323,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v1"
-version = "1.10.1"
+version = "1.10.1-8-g10adbdb"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
@@ -5345,7 +5345,7 @@ dependencies = [
 
 [[package]]
 name = "zenoh-backend-influxdb-v2"
-version = "1.10.1"
+version = "1.10.1-8-g10adbdb"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
